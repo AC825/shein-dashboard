@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHEIN 数据中台 · 免费部署指南</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #070b14;
+    color: #e2e8f0;
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    line-height: 1.7;
+  }
+
+  /* 顶部导航 */
+  .topnav {
+    background: rgba(10,14,26,0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(124,58,237,0.2);
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topnav-logo { font-size: 22px; }
+  .topnav-title { font-size: 16px; font-weight: 700; color: #fff; }
+  .topnav-sub { font-size: 12px; color: #64748b; margin-left: auto; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 50px 20px 40px;
+    position: relative;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(124,58,237,0.15);
+    border: 1px solid rgba(124,58,237,0.3);
+    color: #a78bfa;
+    font-size: 12px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+  }
+  .hero h1 {
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #fff 0%, #a78bfa 50%, #22d3ee 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .hero p { color: #64748b; font-size: 15px; }
+
+  /* 方案卡片 */
+  .method-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin: 32px 0;
+  }
+  .method-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 22px;
+    position: relative;
+    transition: border-color 0.3s;
+    cursor: default;
+  }
+  .method-card:hover { border-color: rgba(124,58,237,0.4); }
+  .method-card.recommended {
+    border-color: rgba(124,58,237,0.4);
+    background: rgba(124,58,237,0.06);
+  }
+  .rec-tag {
+    position: absolute;
+    top: -10px;
+    right: 16px;
+    background: linear-gradient(90deg, #7c3aed, #06b6d4);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 10px;
+  }
+  .method-icon { font-size: 28px; margin-bottom: 10px; }
+  .method-name { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .method-desc { font-size: 13px; color: #64748b; margin-bottom: 12px; }
+  .method-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+  .tag-green { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+  .tag-blue { background: rgba(6,182,212,0.12); color: #22d3ee; border: 1px solid rgba(6,182,212,0.2); }
+  .tag-yellow { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+  .tag-purple { background: rgba(124,58,237,0.12); color: #a78bfa; border: 1px solid rgba(124,58,237,0.2); }
+  .tag-red { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+  /* 步骤区块 */
+  .section {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: rgba(124,58,237,0.15);
+    border: 1px solid rgba(124,58,237,0.2);
+    flex-shrink: 0;
+  }
+  .section-title { font-size: 18px; font-weight: 700; color: #fff; }
+  .section-sub { font-size: 12px; color: #64748b; }
+
+  /* 步骤列表 */
+  .steps { counter-reset: step; }
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c3aed, #06b6d4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-title { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-bottom: 6px; }
+  .step-desc { font-size: 13px; color: #94a3b8; line-height: 1.8; }
+  .step-desc a { color: #7c3aed; text-decoration: none; }
+  .step-desc a:hover { color: #a78bfa; text-decoration: underline; }
+
+  /* 代码块 */
+  .code-block {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    color: #22d3ee;
+    margin: 10px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    position: relative;
+  }
+  .code-block .comment { color: #475569; }
+  .code-block .highlight { color: #a78bfa; }
+
+  /* 截图占位 */
+  .screenshot {
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    color: #475569;
+    font-size: 13px;
+    margin: 12px 0;
+  }
+
+  /* 注意框 */
+  .notice {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin: 14px 0;
+    font-size: 13px;
+  }
+  .notice-info { background: rgba(6,182,212,0.07); border: 1px solid rgba(6,182,212,0.2); color: #67e8f9; }
+  .notice-warn { background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.2); color: #fde68a; }
+  .notice-ok { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.2); color: #6ee7b7; }
+
+  /* 对比表格 */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 16px 0;
+  }
+  .compare-table th {
+    background: rgba(124,58,237,0.12);
+    color: #a78bfa;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(124,58,237,0.2);
+  }
+  .compare-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #94a3b8;
+    vertical-align: middle;
+  }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table td:first-child { color: #e2e8f0; font-weight: 600; }
+
+  /* 底部 */
+  .footer {
+    text-align: center;
+    padding: 30px;
+    color: #334155;
+    font-size: 12px;
+  }
+
+  /* 动画 */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .section { animation: fadeInUp 0.4s ease forwards; }
+
+  .emoji-btn {
+    display: inline-block;
+    background: linear-gradient(135deg, #7c3aed, #06b6d4);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 24px;
+    border-radius: 10px;
+    text-decoration: none;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+  .emoji-btn:hover { opacity: 0.9; }
+
+  .divider {
+    text-align: center;
+    color: #1e293b;
+    font-size: 13px;
+    margin: 30px 0;
+    position: relative;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: rgba(255,255,255,0.05);
+  }
+  .divider::before { left: 0; }
+  .divider::after { right: 0; }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <span class="topnav-logo">🛍️</span>
+  <span class="topnav-title">SHEIN 数据中台 · 免费部署指南</span>
+  <span class="topnav-sub">让更多人可以访问你的数据中台</span>
+</div>
+
+<div class="container">
+
+  <div class="hero">
+    <div class="hero-badge">✦ FREE DEPLOYMENT GUIDE</div>
+    <h1>免费上线，多人访问</h1>
+    <p>你的项目是纯静态网页，不需要服务器，完全可以 <strong style="color:#34d399">0 元</strong> 部署到全球 CDN！</p>
+  </div>
+
+  <!-- 方案对比 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">📊</div>
+      <div>
+        <div class="section-title">三种免费方案对比</div>
+        <div class="section-sub">根据你的需求选择最合适的方式</div>
+      </div>
+    </div>
+
+    <div class="method-grid">
+      <div class="method-card recommended">
+        <div class="rec-tag">⭐ 最推荐</div>
+        <div class="method-icon">▲</div>
+        <div class="method-name">Vercel</div>
+        <div class="method-desc">全球最快的静态部署平台，国内访问速度快，操作最简单，上传即上线</div>
+        <div class="method-tags">
+          <span class="tag tag-green">完全免费</span>
+          <span class="tag tag-blue">5分钟上线</span>
+          <span class="tag tag-purple">自动HTTPS</span>
+          <span class="tag tag-blue">国内可访问</span>
+        </div>
+      </div>
+
+      <div class="method-card">
+        <div class="method-icon">🌐</div>
+        <div class="method-name">Netlify</div>
+        <div class="method-desc">老牌静态部署平台，拖拽文件夹即可部署，无需任何账号绑定也能用</div>
+        <div class="method-tags">
+          <span class="tag tag-green">完全免费</span>
+          <span class="tag tag-blue">拖拽部署</span>
+          <span class="tag tag-purple">自动HTTPS</span>
+          <span class="tag tag-yellow">国内偶有延迟</span>
+        </div>
+      </div>
+
+      <div class="method-card">
+        <div class="method-icon">🐙</div>
+        <div class="method-name">GitHub Pages</div>
+        <div class="method-desc">GitHub 官方免费托管，需要先把代码上传 GitHub，然后一键开启</div>
+        <div class="method-tags">
+          <span class="tag tag-green">完全免费</span>
+          <span class="tag tag-yellow">需要 GitHub 账号</span>
+          <span class="tag tag-red">国内偶有问题</span>
+        </div>
+      </div>
+    </div>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>平台</th>
+          <th>速度</th>
+          <th>难度</th>
+          <th>自定义域名</th>
+          <th>免费额度</th>
+          <th>国内访问</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>▲ Vercel</td>
+          <td>⚡ 极快</td>
+          <td>⭐ 最简单</td>
+          <td>✅ 免费支持</td>
+          <td>无限静态</td>
+          <td>✅ 良好</td>
+        </tr>
+        <tr>
+          <td>🌐 Netlify</td>
+          <td>⚡ 快</td>
+          <td>⭐ 简单</td>
+          <td>✅ 免费支持</td>
+          <td>100GB/月</td>
+          <td>⚠️ 一般</td>
+        </tr>
+        <tr>
+          <td>🐙 GitHub Pages</td>
+          <td>🐢 中等</td>
+          <td>⭐⭐ 稍复杂</td>
+          <td>✅ 免费支持</td>
+          <td>1GB存储</td>
+          <td>⚠️ 不稳定</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ======= 方案一：Vercel ======= -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">▲</div>
+      <div>
+        <div class="section-title">方案一：Vercel 部署（推荐）</div>
+        <div class="section-sub">最简单，5分钟搞定，得到一个 xxx.vercel.app 网址</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">注册 Vercel 账号</div>
+          <div class="step-desc">
+            打开 <a href="https://vercel.com" target="_blank">vercel.com</a> → 点击 <strong style="color:#fff">Sign Up</strong> → 选择用 <strong style="color:#fff">GitHub 登录</strong>（没有 GitHub 就先注册一个，都免费）<br><br>
+            <span style="color:#475569">💡 也可以直接用邮箱注册 Vercel，不强制绑定 GitHub</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">把项目文件上传到 GitHub</div>
+          <div class="step-desc">
+            打开 <a href="https://github.com/new" target="_blank">github.com/new</a> 创建一个仓库，名字比如 <code style="color:#a78bfa">shein-dashboard</code>，选 <strong>Private（私有）</strong> 保护数据安全<br><br>
+            然后在你的电脑上打开 PowerShell，进入项目目录，运行：
+          </div>
+          <div class="code-block"><span class="comment"># 进入项目目录</span>
+cd "e:\软件开发\shein-dashboard"
+
+<span class="comment"># 初始化 git 并上传（把 YOUR_USERNAME 换成你的 GitHub 用户名）</span>
+git init
+git add .
+git commit -m "first commit"
+git remote add origin https://github.com/<span class="highlight">YOUR_USERNAME</span>/shein-dashboard.git
+git branch -M main
+git push -u origin main</div>
+          <div class="notice notice-warn">
+            ⚠️ 如果你的数据是真实的销售数据，建议选 <strong>Private（私有仓库）</strong>，这样别人搜不到你的代码和数据
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">在 Vercel 导入并一键部署</div>
+          <div class="step-desc">
+            登录 Vercel → 点击 <strong style="color:#fff">Add New → Project</strong> → 找到你刚创建的 <code style="color:#a78bfa">shein-dashboard</code> 仓库 → 点击 <strong style="color:#fff">Import</strong><br><br>
+            在配置页面：
+            <ul style="padding-left:20px;margin-top:8px">
+              <li>Framework Preset 选 <strong style="color:#fff">Other</strong></li>
+              <li>Root Directory 保持 <code style="color:#a78bfa">./</code> 默认</li>
+              <li>Build Command 留<strong>空</strong></li>
+              <li>Output Directory 留<strong>空</strong></li>
+            </ul>
+            <br>点击 <strong style="color:#fff">Deploy</strong> → 等待约 30 秒 → 部署完成！🎉
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">获取你的网址并分享</div>
+          <div class="step-desc">
+            部署成功后 Vercel 会给你一个网址，格式为：<br>
+            <div class="code-block">https://<span class="highlight">shein-dashboard-xxx</span>.vercel.app</div>
+            把这个网址发给同事/老板，任何人都能直接用浏览器打开，无需安装任何软件 ✅<br><br>
+            <span style="color:#475569">📱 手机也能访问！响应式设计，PC/手机通用</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-title">（可选）绑定自定义域名</div>
+          <div class="step-desc">
+            如果你有自己的域名（比如 <code style="color:#a78bfa">shein.yourcompany.com</code>），在 Vercel 项目设置 → Domains 里添加即可，完全免费，自动配置 HTTPS 证书
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice notice-ok">
+      ✅ 以后每次你修改代码后，只需运行 <code style="color:#22d3ee">git add . && git commit -m "update" && git push</code>，Vercel 会自动重新部署，网址不变
+    </div>
+  </div>
+
+  <div class="divider">或者用更简单的拖拽方式</div>
+
+  <!-- ======= 方案二：Netlify 拖拽 ======= -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">🌐</div>
+      <div>
+        <div class="section-title">方案二：Netlify 拖拽部署（最快上手）</div>
+        <div class="section-sub">不需要 Git，直接拖文件夹，2分钟上线</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">打开 Netlify Drop 页面</div>
+          <div class="step-desc">
+            直接访问：<a href="https://app.netlify.com/drop" target="_blank">app.netlify.com/drop</a><br>
+            不需要注册账号也能上传！（但注册后可以管理已上传的网站）
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">拖拽你的项目文件夹</div>
+          <div class="step-desc">
+            打开 Windows 资源管理器，找到 <code style="color:#a78bfa">e:\软件开发\shein-dashboard</code> 这个文件夹，直接把整个文件夹拖到 Netlify 页面的上传区域<br><br>
+            <div class="notice notice-warn">
+              ⚠️ 注意：拖拽的是 <strong>shein-dashboard 这个文件夹本身</strong>，不是里面的文件！
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">等待上传，获取链接</div>
+          <div class="step-desc">
+            上传完成后会自动给你一个随机网址，格式如：<br>
+            <div class="code-block">https://<span class="highlight">random-name-123456</span>.netlify.app</div>
+            复制这个地址发给别人就可以了！
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice notice-info">
+      💡 Netlify 免费拖拽部署的链接有效期 <strong>24小时</strong>（未登录状态）。注册账号后上传，链接永久有效。注册同样免费。
+    </div>
+  </div>
+
+  <!-- ======= 重要说明：数据同步问题 ======= -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">⚠️</div>
+      <div>
+        <div class="section-title">重要说明：关于多人数据同步</div>
+        <div class="section-sub">部署前必看，避免踩坑</div>
+      </div>
+    </div>
+
+    <div class="notice notice-warn">
+      ⚠️ <strong>当前架构说明：</strong>你的数据存储在每个人自己浏览器的 localStorage 里，这意味着每个人打开网址看到的数据是<strong>相互独立的</strong>，A 导入的数据 B 看不到。
+    </div>
+
+    <p style="color:#94a3b8;font-size:13px;margin:16px 0">这有两种使用场景：</p>
+
+    <table class="compare-table">
+      <thead>
+        <tr><th>使用场景</th><th>是否适合当前方案</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🙋 一个人使用，方便在多设备访问</td>
+          <td><span class="tag tag-green">✅ 完全适合</span></td>
+          <td>部署后你自己用，随时随地打开</td>
+        </tr>
+        <tr>
+          <td>👥 多人查看同一份数据</td>
+          <td><span class="tag tag-yellow">⚠️ 需要额外处理</span></td>
+          <td>见下方解决方案</td>
+        </tr>
+        <tr>
+          <td>📊 老板/同事只查看，不导入数据</td>
+          <td><span class="tag tag-green">✅ 适合</span></td>
+          <td>在代码里内置演示数据即可</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:20px">
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">💡 让多人看同一份数据的简单方案：</div>
+
+      <div style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:10px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:700;color:#a78bfa;margin-bottom:8px">方案 A（推荐·最省事）：导出 JSON 分享</div>
+        <div style="font-size:13px;color:#94a3b8">你在自己电脑上导入数据后，把 localStorage 里的数据导出成 JSON 文件，其他人打开网址后导入这个 JSON，就能看到相同数据。<br>可以在数据导入页面加一个"导出数据包"按钮来实现。</div>
+      </div>
+
+      <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:700;color:#22d3ee;margin-bottom:8px">方案 B（进阶·真正实时同步）：接入免费数据库</div>
+        <div style="font-size:13px;color:#94a3b8">接入 <strong style="color:#fff">Supabase</strong>（免费 PostgreSQL 数据库）或 <strong style="color:#fff">Firebase</strong>（免费 NoSQL），把数据存云端，所有人实时同步。这需要改造后端代码，但依然 <strong style="color:#34d399">完全免费</strong>。如需要可以告诉我，我帮你改造。</div>
+      </div>
+
+      <div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:16px">
+        <div style="font-weight:700;color:#34d399;margin-bottom:8px">方案 C（最简单·适合老板查看）：把演示数据写死在代码里</div>
+        <div style="font-size:13px;color:#94a3b8">在 data.js 里把演示数据改成你们公司真实数据并写死，然后重新部署。所有人打开后都能看到同样的数据（不能修改，只能查看）。适合给老板汇报用。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= 数据导出功能 ======= -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">📤</div>
+      <div>
+        <div class="section-title">附加功能：一键导出数据包 / 分享给同事</div>
+        <div class="section-sub">在现有代码里加几行，即可导出并分享数据</div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:12px">在 app.js 里的某个地方加入以下函数，即可让别人导入你的数据：</div>
+    <div class="code-block"><span class="comment">// 导出当前所有数据为 JSON 文件（发给同事后，同事可一键导入）</span>
+function exportDataPackage() {
+  const exportData = {
+    shops: DB.getShops(),
+    sales: DB.getAllSales(),
+    exportTime: new Date().toISOString(),
+    version: '1.0'
+  };
+  const json = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `shein-data-${new Date().toLocaleDateString('zh')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('📦 数据包已导出！发给同事后让他在导入页面导入', 'success');
+}
+
+<span class="comment">// 导入数据包</span>
+function importDataPackage(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = JSON.parse(e.target.result);
+    if (data.shops) data.shops.forEach(s => DB.saveShop(s));
+    if (data.sales) data.sales.forEach(s => DB.saveSales(s.shopId, s.data));
+    showToast('✅ 数据包导入成功！', 'success');
+    navigate('dashboard');
+  };
+  reader.readAsText(file);
+}</div>
+  </div>
+
+  <!-- ======= Git 快速安装 ======= -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">🔧</div>
+      <div>
+        <div class="section-title">没有 Git？先安装</div>
+        <div class="section-sub">Windows 安装 Git 只需 2 分钟</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">下载 Git for Windows</div>
+          <div class="step-desc">
+            访问 <a href="https://git-scm.com/download/win" target="_blank">git-scm.com/download/win</a> → 点击下载 64-bit 版本 → 一路点"下一步"安装
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">配置用户名和邮箱</div>
+          <div class="step-desc">安装完后打开 PowerShell 运行：</div>
+          <div class="code-block">git config --global user.name "你的名字"
+git config --global user.email "你的邮箱@example.com"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" style="text-align:center;background:rgba(124,58,237,0.06);border-color:rgba(124,58,237,0.2)">
+    <div style="font-size:24px;margin-bottom:12px">🚀</div>
+    <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:8px">推荐行动路径</div>
+    <div style="font-size:13px;color:#94a3b8;max-width:500px;margin:0 auto 20px">
+      <strong style="color:#a78bfa">Step 1</strong> → 先用 Netlify 拖拽部署，2分钟拿到网址先用起来<br>
+      <strong style="color:#22d3ee">Step 2</strong> → 注册 GitHub + Vercel，正式托管，获得稳定网址<br>
+      <strong style="color:#34d399">Step 3</strong>（可选）→ 接入 Supabase 实现多人数据同步
+    </div>
+    <a class="emoji-btn" href="https://app.netlify.com/drop" target="_blank">🌐 立即去 Netlify 拖拽部署</a>
+    &nbsp;&nbsp;
+    <a class="emoji-btn" href="https://vercel.com/new" target="_blank" style="background:linear-gradient(135deg,#000,#333)">▲ 去 Vercel 正式部署</a>
+  </div>
+
+</div>
+
+<div class="footer">
+  SHEIN 跨境数据中台 · 部署指南 · 有问题随时问 AI 助手
+</div>
+
+</body>
+</html>

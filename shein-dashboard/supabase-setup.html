@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supabase 配置向导 · SHEIN 数据中台</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#070b14; color:#e2e8f0; font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; line-height:1.7; }
+
+.topnav { background:rgba(10,14,26,0.95); backdrop-filter:blur(12px); border-bottom:1px solid rgba(124,58,237,0.2); padding:14px 32px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:100; }
+.topnav-logo { font-size:22px; }
+.topnav-title { font-size:16px; font-weight:700; color:#fff; }
+
+.container { max-width:840px; margin:0 auto; padding:40px 20px 80px; }
+
+.hero { text-align:center; padding:40px 0 32px; }
+.hero-badge { display:inline-block; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.3); color:#a78bfa; font-size:12px; padding:4px 14px; border-radius:20px; margin-bottom:14px; }
+.hero h1 { font-size:32px; font-weight:800; background:linear-gradient(135deg,#fff 0%,#a78bfa 50%,#22d3ee 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:10px; }
+.hero p { color:#64748b; font-size:14px; }
+
+.section { background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:26px; margin-bottom:18px; }
+.section-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); }
+.section-num { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#7c3aed,#06b6d4); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; color:#fff; flex-shrink:0; }
+.section-title { font-size:17px; font-weight:700; color:#fff; }
+.section-sub { font-size:12px; color:#64748b; }
+
+.step { display:flex; gap:14px; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid rgba(255,255,255,0.04); }
+.step:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
+.step-dot { width:8px; height:8px; border-radius:50%; background:#7c3aed; flex-shrink:0; margin-top:8px; box-shadow:0 0 8px #7c3aed; }
+.step-body { flex:1; }
+.step-title { font-size:14px; font-weight:600; color:#e2e8f0; margin-bottom:5px; }
+.step-desc { font-size:13px; color:#94a3b8; }
+.step-desc a { color:#7c3aed; text-decoration:none; }
+.step-desc a:hover { color:#a78bfa; text-decoration:underline; }
+
+.code-block { background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:14px 16px; font-family:'Consolas','Courier New',monospace; font-size:13px; color:#22d3ee; margin:10px 0; position:relative; user-select:all; }
+.code-block .gray { color:#475569; }
+.code-block .purple { color:#a78bfa; }
+.code-block .green { color:#34d399; }
+
+.copy-hint { position:absolute; top:8px; right:10px; font-size:11px; color:#475569; pointer-events:none; }
+
+.notice { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:10px; margin:12px 0; font-size:13px; }
+.notice-info { background:rgba(6,182,212,0.07); border:1px solid rgba(6,182,212,0.2); color:#67e8f9; }
+.notice-warn { background:rgba(245,158,11,0.07); border:1px solid rgba(245,158,11,0.2); color:#fde68a; }
+.notice-ok { background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.2); color:#6ee7b7; }
+
+.btn-primary { display:inline-block; background:linear-gradient(135deg,#7c3aed,#06b6d4); color:#fff; font-size:14px; font-weight:700; padding:10px 24px; border-radius:10px; text-decoration:none; border:none; cursor:pointer; }
+.btn-primary:hover { opacity:0.9; }
+
+.config-box { background:rgba(0,0,0,0.35); border:1px solid rgba(124,58,237,0.3); border-radius:12px; padding:20px; margin-top:16px; }
+.config-row { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.config-row:last-child { margin-bottom:0; }
+.config-label { font-size:13px; font-weight:600; color:#a78bfa; min-width:80px; padding-top:3px; }
+.config-input { flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 12px; color:#e2e8f0; font-family:'Consolas',monospace; font-size:13px; min-width:200px; }
+.config-input:focus { outline:none; border-color:rgba(124,58,237,0.5); }
+.config-gen-btn { background:linear-gradient(135deg,#7c3aed,#06b6d4); color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.config-gen-btn:hover { opacity:0.9; }
+
+.result-box { display:none; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:10px; padding:16px; margin-top:14px; }
+.result-box.show { display:block; }
+.result-code { background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:12px 14px; font-family:'Consolas',monospace; font-size:12px; color:#22d3ee; white-space:pre-wrap; word-break:break-all; margin-top:10px; user-select:all; }
+
+.arch-diagram { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px; margin:16px 0; text-align:center; }
+.arch-box { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 10px; font-size:13px; }
+.arch-box-title { font-weight:700; color:#fff; margin-bottom:4px; }
+.arch-box-sub { font-size:11px; color:#64748b; }
+.arch-arrow { font-size:20px; color:#7c3aed; }
+
+.tag { font-size:11px; padding:2px 10px; border-radius:8px; font-weight:600; display:inline-block; }
+.tag-green { background:rgba(16,185,129,0.12); color:#34d399; border:1px solid rgba(16,185,129,0.2); }
+.tag-blue { background:rgba(6,182,212,0.12); color:#22d3ee; border:1px solid rgba(6,182,212,0.2); }
+.tag-purple { background:rgba(124,58,237,0.12); color:#a78bfa; border:1px solid rgba(124,58,237,0.2); }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <span class="topnav-logo">☁️</span>
+  <span class="topnav-title">Supabase 配置向导 · SHEIN 数据中台多人同步</span>
+</div>
+
+<div class="container">
+
+  <div class="hero">
+    <div class="hero-badge">✦ 5步完成配置</div>
+    <h1>多人实时同步，完全免费</h1>
+    <p>Supabase 免费版：500MB 数据库、无限次请求、实时推送，完全够用</p>
+  </div>
+
+  <!-- 架构说明 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">✦</div>
+      <div>
+        <div class="section-title">工作原理</div>
+        <div class="section-sub">配置后的数据流向</div>
+      </div>
+    </div>
+
+    <div class="arch-diagram">
+      <div class="arch-box">
+        <div class="arch-box-title">你 / 同事 A</div>
+        <div class="arch-box-sub">导入数据</div>
+        <div style="margin-top:8px"><span class="tag tag-purple">浏览器</span></div>
+      </div>
+      <div>
+        <div class="arch-arrow">⟷</div>
+        <div style="font-size:11px;color:#475569;margin-top:4px">实时同步</div>
+      </div>
+      <div class="arch-box">
+        <div class="arch-box-title">Supabase 云数据库</div>
+        <div class="arch-box-sub">PostgreSQL · 免费 · 500MB</div>
+        <div style="margin-top:8px"><span class="tag tag-green">云端</span></div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:20px;color:#7c3aed;margin:4px 0">↕</div>
+    <div class="arch-diagram">
+      <div></div>
+      <div class="arch-box" style="background:rgba(6,182,212,0.05);border-color:rgba(6,182,212,0.2)">
+        <div class="arch-box-title" style="color:#22d3ee">同事 B / 老板</div>
+        <div class="arch-box-sub">打开网址，自动看到最新数据</div>
+        <div style="margin-top:8px"><span class="tag tag-blue">只需浏览器</span></div>
+      </div>
+      <div></div>
+    </div>
+
+    <div class="notice notice-ok" style="margin-top:16px">
+      ✅ 任何人只要打开网址，数据就会自动从云端加载。你导入新数据后，别人<strong>刷新页面</strong>即可看到。
+    </div>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div>
+        <div class="section-title">注册 Supabase 账号（免费）</div>
+        <div class="section-sub">用 GitHub 或邮箱注册，30秒完成</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">打开 Supabase 官网并注册</div>
+        <div class="step-desc">
+          访问 <a href="https://supabase.com" target="_blank">supabase.com</a> → 点击 <strong style="color:#fff">Start your project</strong> → 用 GitHub 登录（最快）或邮箱注册
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">创建新项目</div>
+        <div class="step-desc">
+          登录后点击 <strong style="color:#fff">New project</strong> → 填写项目名称（如 <code style="color:#a78bfa">shein-data</code>）→ 设置数据库密码（记住它）→ 地区选 <strong style="color:#fff">Southeast Asia (Singapore)</strong> → 点击 <strong style="color:#fff">Create new project</strong><br><br>
+          <span style="color:#475569">⏳ 等待约 60 秒，项目创建完成</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div>
+        <div class="section-title">建立数据库表</div>
+        <div class="section-sub">复制 SQL，在 Supabase 控制台运行</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">进入 SQL Editor</div>
+        <div class="step-desc">
+          在 Supabase 控制台左侧菜单 → 点击 <strong style="color:#fff">SQL Editor</strong> → 点击 <strong style="color:#fff">New query</strong>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">粘贴并运行建表 SQL</div>
+        <div class="step-desc">复制下面的全部内容，粘贴到 SQL Editor，然后点击 <strong style="color:#fff">RUN</strong>（或按 Ctrl+Enter）：</div>
+        <div class="code-block" style="font-size:12px">
+<span class="gray">-- 1. 店铺表</span>
+CREATE TABLE IF NOT EXISTS shops (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  platform   TEXT DEFAULT 'SHEIN',
+  color      TEXT DEFAULT '#6366f1',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+<span class="gray">-- 2. 销售数据表</span>
+CREATE TABLE IF NOT EXISTS sales (
+  id            BIGSERIAL PRIMARY KEY,
+  date          DATE NOT NULL,
+  shop_id       TEXT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  style_id      TEXT NOT NULL,
+  style_name    TEXT NOT NULL,
+  orders        INT DEFAULT 0,
+  refund_orders INT DEFAULT 0,
+  revenue       NUMERIC(12,2) DEFAULT 0,
+  price         NUMERIC(10,2) DEFAULT 0,
+  UNIQUE (date, shop_id, style_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sales_date    ON sales (date);
+CREATE INDEX IF NOT EXISTS idx_sales_shop_id ON sales (shop_id);
+
+<span class="gray">-- 3. 开启读写权限（内部使用）</span>
+ALTER TABLE shops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "all_shops" ON shops USING (true) WITH CHECK (true);
+CREATE POLICY "all_sales" ON sales  USING (true) WITH CHECK (true);</div>
+        <div class="notice notice-ok" style="margin-top:8px">
+          ✅ 运行成功后会显示 "Success. No rows returned"，这是正常的
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div>
+        <div class="section-title">获取连接密钥</div>
+        <div class="section-sub">找到你的 Project URL 和 anon key</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">进入项目设置</div>
+        <div class="step-desc">
+          左侧菜单 → 点击最下方 <strong style="color:#fff">⚙️ Project Settings</strong> → 点击 <strong style="color:#fff">API</strong>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">复制两个值</div>
+        <div class="step-desc">
+          你会看到两个重要值，把它们复制到下面的输入框：<br><br>
+          <strong style="color:#a78bfa">① Project URL</strong>：格式是 <code style="color:#22d3ee">https://xxxxxxxxxxxx.supabase.co</code><br>
+          <strong style="color:#a78bfa">② anon public key</strong>：以 <code style="color:#22d3ee">eyJ...</code> 开头的一长串字符
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4：自动生成配置代码 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div>
+        <div class="section-title">生成配置代码</div>
+        <div class="section-sub">填入密钥，自动生成要粘贴到 data.js 的代码</div>
+      </div>
+    </div>
+
+    <div class="config-box">
+      <div class="config-row">
+        <div class="config-label">Project URL</div>
+        <input class="config-input" id="inp-url" placeholder="https://xxxxxxxxxxxx.supabase.co" oninput="genCode()">
+      </div>
+      <div class="config-row">
+        <div class="config-label">Anon Key</div>
+        <input class="config-input" id="inp-key" placeholder="eyJhbGciOiJIUzI1NiIs..." oninput="genCode()">
+      </div>
+      <div style="margin-top:12px">
+        <button class="config-gen-btn" onclick="genCode()">✦ 生成配置代码</button>
+      </div>
+    </div>
+
+    <div class="result-box" id="result-box">
+      <div style="font-size:13px;color:#34d399;font-weight:700;margin-bottom:8px">✅ 复制以下代码，替换 data.js 第 5-6 行：</div>
+      <div class="result-code" id="result-code"></div>
+      <div class="notice notice-info" style="margin-top:12px">
+        💡 <strong>操作方法</strong>：打开 <code>e:\软件开发\shein-dashboard\data.js</code>，找到第 5-6 行（SUPABASE_URL 和 SUPABASE_KEY 那两行），替换成上面的代码，保存文件
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div>
+        <div class="section-title">部署并测试</div>
+        <div class="section-sub">把配置好的代码部署到 Vercel，多人同步正式生效</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">填入密钥后，提交代码</div>
+        <div class="step-desc">
+          修改并保存 data.js 后，打开 PowerShell 运行：
+        </div>
+        <div class="code-block">cd "e:\软件开发\shein-dashboard"
+git add .
+git commit -m "add supabase sync"
+git push</div>
+        <div class="step-desc" style="margin-top:8px">Vercel 会自动重新部署，约 30 秒后生效</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">测试多人同步</div>
+        <div class="step-desc">
+          1. 你在自己电脑打开网址，进入「数据导入」上传一份 CSV 数据<br>
+          2. 让同事在他的手机/电脑打开同一个网址<br>
+          3. 同事刷新页面，就能看到你导入的数据 🎉<br><br>
+          <span style="color:#475569">顶部栏会显示 <strong style="color:#34d399">✓ 已同步</strong> 表示连接正常</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice notice-warn">
+      ⚠️ <strong>安全提示</strong>：anon key 是公开密钥，设计上可以放到前端代码里。但为了防止竞争对手看到你的数据，建议把 Vercel 项目设为需要密码访问（Vercel Pro 功能），或者使用 Supabase 的 Row Level Security 设置更严格的访问规则。
+    </div>
+  </div>
+
+  <!-- 常见问题 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">❓</div>
+      <div>
+        <div class="section-title">常见问题</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">数据量多少能免费用？</div>
+        <div class="step-desc">Supabase 免费版给 500MB 数据库空间。你的销售数据每条约 200 字节，500MB 可存约 <strong style="color:#34d399">250万条</strong> 记录，几年内都不用担心。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">同事打开网址时，会不会很慢？</div>
+        <div class="step-desc">打开时先显示本地缓存（即时）,同时异步从 Supabase 加载最新数据。整体感觉和本地使用差不多，只有第一次打开时会有 1-2 秒的同步时间。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">我在国内，Supabase 能访问吗？</div>
+        <div class="step-desc">可以，选新加坡节点后国内访问速度不错。API 请求走 HTTPS，不会被屏蔽。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div class="step-title">免费版会不会突然收费或停服？</div>
+        <div class="step-desc">Supabase 是开源项目，免费版稳定存在多年。即使未来政策变化，数据可以随时导出。PostgreSQL 格式，迁移成本极低。</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px">
+    <a class="btn-primary" href="https://supabase.com" target="_blank">🚀 去 Supabase 开始配置</a>
+  </div>
+
+</div>
+
+<script>
+function genCode() {
+  const url = document.getElementById('inp-url').value.trim();
+  const key = document.getElementById('inp-key').value.trim();
+  if (!url || !key) return;
+  const code = `const SUPABASE_URL  = '${url}';\nconst SUPABASE_KEY  = '${key}';`;
+  document.getElementById('result-code').textContent = code;
+  document.getElementById('result-box').classList.add('show');
+}
+</script>
+</body>
+</html>
