@@ -6,14 +6,17 @@ let bigScreenMode = false;
 
 // 面包屑配置
 const PAGE_META = {
-  dashboard:    { label: '数据看板',    icon: '📊' },
-  styles:       { label: '款式分析',    icon: '👗' },
-  revenue:      { label: '营业额统计',  icon: '💰' },
-  profit:       { label: '利润计算',    icon: '📐' },
-  alert:        { label: '预警中心',    icon: '🔔' },
-  import:       { label: '数据导入',    icon: '📁' },
-  shops:        { label: '所有店铺',    icon: '🏪' },
-  'shop-detail':{ label: '店铺详情',    icon: '🏷️' },
+  dashboard:    { label: '数据看板',    icon: '' },
+  styles:       { label: '款式分析',    icon: '' },
+  revenue:      { label: '营业额统计',  icon: '' },
+  profit:       { label: '利润计算',    icon: '' },
+  alert:        { label: '预警中心',    icon: '' },
+  import:       { label: '数据导入',    icon: '' },
+  shops:        { label: '所有店铺',    icon: '' },
+  'shop-detail':{ label: '店铺详情',    icon: '' },
+  academy:      { label: '知识学院',    icon: '' },
+  admin:        { label: '权限管理',    icon: '' },
+  profile:      { label: '个人中心',    icon: '' },
 };
 
 // 科技感图表全局配置
@@ -27,27 +30,23 @@ const CHART_DEFAULTS = {
   }
 };
 
-// ============ 初始化 ============
-window.onload = async function () {
-  initDemoData();           // 无 Supabase 时加载演示数据
+// ============ 由 auth.js 调用的主应用初始化 ============
+async function initMainApp() {
+  initDemoData();
   applyDarkChartDefaults();
-  initParticles();
   initRipple();
   updateTopbarDate();
   setInterval(updateTopbarDate, 60000);
 
   if (SUPABASE_ENABLED) {
-    // 先用本地缓存快速渲染，再异步拉云端最新数据
     renderShopNav();
     updateSidebarFooter();
     navigate('dashboard');
     await syncFromSupabase();
-    // 同步完成后刷新当前页面
     renderShopNav();
     updateSidebarFooter();
     navigate(currentPage, currentParam);
     initRealtime();
-    // 每5分钟自动同步一次
     setInterval(async () => {
       await syncFromSupabase();
       renderShopNav();
@@ -57,11 +56,10 @@ window.onload = async function () {
     renderShopNav();
     updateSidebarFooter();
     navigate('dashboard');
-    // 未配置时在状态栏提示
     const el = document.getElementById('sync-status');
-    if (el) { el.textContent = '📦 本地模式'; el.style.color = '#475569'; }
+    if (el) { el.textContent = '本地模式'; el.style.color = '#475569'; }
   }
-};
+}
 
 // 手动触发同步
 async function manualSync() {
@@ -207,8 +205,17 @@ function refreshCurrentPage() {
   showToast('🔄 数据已刷新', 'info');
 }
 
-// ============ 导航路由（带动画） ============
+// ============ 导航路由（带动画+权限检查） ============
 function navigate(page, param) {
+  // 权限检查（admin/profile/shop-detail 不受限）
+  const freePages = ['admin', 'profile', 'shop-detail'];
+  if (!freePages.includes(page) && typeof checkPagePermission === 'function') {
+    if (!checkPagePermission(page)) {
+      showToast('暂无权限，请联系管理员授权', 'error');
+      return;
+    }
+  }
+
   progressStart();
   currentPage = page;
   currentParam = param || null;
@@ -243,6 +250,9 @@ function navigate(page, param) {
         alert: renderAlert,
         import: renderImport,
         shops: renderShops,
+        academy: renderAcademy,
+        admin: renderAdmin,
+        profile: renderProfile,
       };
       if (renders[page]) renders[page]();
     }
@@ -250,7 +260,6 @@ function navigate(page, param) {
       targetPg.classList.add('active', 'page-enter');
       setTimeout(() => targetPg.classList.remove('page-enter'), 350);
     }
-    // 滚回顶部
     const container = document.getElementById('page-container');
     if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -283,6 +292,60 @@ function initRipple() {
     setTimeout(() => r.remove(), 500);
   });
 }
+
+// ============ 手机端弹出菜单 ============
+function showMobileMenu() {
+  const isAdmin = CURRENT_USER && CURRENT_USER.role === 'admin';
+  const name = CURRENT_USER ? (CURRENT_USER.nickname || CURRENT_USER.phone) : '用户';
+
+  // 如果已存在则移除
+  const existing = document.getElementById('mobile-menu-overlay');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mobile-menu-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.6);
+    display:flex;align-items:flex-end;
+  `;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div style="width:100%;background:linear-gradient(180deg,#0d1117,#070b14);
+      border-top:1px solid rgba(124,58,237,0.3);border-radius:20px 20px 0 0;
+      padding:16px 0 ${window.innerHeight < 700 ? '8px' : '20px'};
+      padding-bottom:calc(${window.innerHeight < 700 ? '8px' : '20px'} + env(safe-area-inset-bottom,0px))">
+      <div style="text-align:center;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px">
+        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#06b6d4);
+          display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;margin:0 auto 8px">
+          ${name.charAt(0).toUpperCase()}
+        </div>
+        <div style="font-size:15px;font-weight:600;color:#e2e8f0">${name}</div>
+        <div style="font-size:12px;color:#475569;margin-top:3px">${CURRENT_USER?.id === 'super_admin' ? '超级管理员' : (isAdmin ? '管理员' : '成员')}</div>
+      </div>
+      ${isAdmin ? `
+      <div class="mobile-menu-item" onclick="document.getElementById('mobile-menu-overlay').remove();navigate('admin')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+        权限管理
+      </div>` : ''}
+      <div class="mobile-menu-item" onclick="document.getElementById('mobile-menu-overlay').remove();navigate('profile')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        个人中心
+      </div>
+      <div class="mobile-menu-item" onclick="document.getElementById('mobile-menu-overlay').remove();navigate('shops')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        店铺管理
+      </div>
+      <div class="mobile-menu-item" style="color:#f87171" onclick="document.getElementById('mobile-menu-overlay').remove();doLogout()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        退出登录
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
 
 // ============ 数字滚动动画 ============
 function animateNumber(el, target, prefix = '', suffix = '', duration = 800) {
@@ -1600,3 +1663,401 @@ function renderAlert() {
       }).join('')}
     </div>`;
 }
+
+// ============================================
+//  页面：知识学院
+// ============================================
+let academyArticles = []; // 内存缓存
+
+async function renderAcademy() {
+  const pg = document.getElementById('page-academy');
+  pg.innerHTML = `
+    <div class="header-row">
+      <div>
+        <h1 style="display:flex;align-items:center;gap:10px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="url(#acg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <defs><linearGradient id="acg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          共享知识学院
+        </h1>
+        <p style="color:#64748b;font-size:13px;margin-top:4px">团队共享经验，共同成长进步</p>
+      </div>
+      <button class="btn-primary" onclick="openModal('modal-add-article')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        分享知识
+      </button>
+    </div>
+
+    <!-- 分类筛选 -->
+    <div class="tabs" id="academy-tabs" style="margin-bottom:20px">
+      <div class="tab active" onclick="filterAcademy('全部')">全部</div>
+      <div class="tab" onclick="filterAcademy('运营经验')">运营经验</div>
+      <div class="tab" onclick="filterAcademy('选品技巧')">选品技巧</div>
+      <div class="tab" onclick="filterAcademy('物流仓储')">物流仓储</div>
+      <div class="tab" onclick="filterAcademy('广告投放')">广告投放</div>
+      <div class="tab" onclick="filterAcademy('数据分析')">数据分析</div>
+      <div class="tab" onclick="filterAcademy('其他')">其他</div>
+    </div>
+
+    <div id="academy-list">
+      <div class="skeleton-list">
+        ${Array(3).fill('<div class="card" style="margin-bottom:12px;height:120px"><div class="skeleton" style="height:100%"></div></div>').join('')}
+      </div>
+    </div>`;
+
+  await loadAcademyArticles();
+}
+
+async function loadAcademyArticles() {
+  try {
+    let articles;
+    if (SUPABASE_ENABLED) {
+      articles = await sbFetch('academy?select=*,users(nickname,phone)&order=created_at.desc');
+      // 扁平化 author 信息
+      articles = articles.map(a => ({
+        ...a,
+        author_name: a.author_name || (a.users ? (a.users.nickname || a.users.phone) : '匿名'),
+        users: undefined
+      }));
+    } else {
+      articles = Cache.get('academy_articles', getDemoAcademyArticles());
+    }
+    academyArticles = articles;
+    renderAcademyList(articles);
+  } catch(e) {
+    document.getElementById('academy-list').innerHTML = `<div class="empty-state"><p style="color:#f87171">加载失败：${e.message}</p></div>`;
+  }
+}
+
+function getDemoAcademyArticles() {
+  return [
+    { id: 1, title: 'SHEIN爆款选品核心逻辑', category: '选品技巧', author_name: '管理员', content: '爆款选品要关注以下几个核心指标：\n1. 趋势性：Google Trends 上升趋势\n2. 竞争度：平台搜索量高但竞品少\n3. 利润空间：成本率控制在40%以内\n4. 评价质量：同类商品差评中发现优化点\n\n实操中建议每周复盘Top10款式的共同特征，建立选品数据库。', likes: 12, created_at: '2026-03-20T10:00:00' },
+    { id: 2, title: '如何降低退款率：实战经验', category: '运营经验', author_name: '团队成员', content: '退款率偏高的主要原因：\n• 商品描述与实物不符（占40%退款原因）\n• 尺码问题（跨境服装最常见）\n• 物流时间过长导致买家取消\n\n解决方案：\n1. 上传真实详细的产品图\n2. 提供精准的尺码对照表\n3. 选择稳定的物流渠道', likes: 8, created_at: '2026-03-22T14:30:00' },
+  ];
+}
+
+function renderAcademyList(articles) {
+  const container = document.getElementById('academy-list');
+  if (!articles || articles.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5" style="margin-bottom:12px"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <p style="color:#475569">暂无文章，成为第一个分享知识的人吧！</p>
+        <button class="btn-primary" style="margin-top:12px" onclick="openModal('modal-add-article')">立即分享</button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = articles.map(a => {
+    const isOwner = CURRENT_USER && (CURRENT_USER.id === a.author_id || CURRENT_USER.role === 'admin');
+    const date = a.created_at ? new Date(a.created_at).toLocaleDateString('zh-CN') : '';
+    const preview = a.content ? a.content.slice(0, 120).replace(/\n/g, ' ') + (a.content.length > 120 ? '...' : '') : '';
+    const catColors = { '运营经验':'#7c3aed','选品技巧':'#06b6d4','物流仓储':'#10b981','广告投放':'#f59e0b','数据分析':'#6366f1','其他':'#64748b' };
+    const catColor = catColors[a.category] || '#64748b';
+    return `
+    <div class="academy-card" id="ac-${a.id}">
+      <div class="academy-card-header">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+            <span class="badge" style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}44;font-size:11px">${a.category || '其他'}</span>
+            <h3 class="academy-title">${a.title}</h3>
+          </div>
+          <p class="academy-preview">${preview}</p>
+        </div>
+      </div>
+      <div class="academy-card-footer">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-size:12px;color:#475569;display:flex;align-items:center;gap:4px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            ${a.author_name || '匿名'}
+          </span>
+          <span style="font-size:12px;color:#334155">${date}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="academy-expand-btn" onclick="toggleArticle(${a.id})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            展开阅读
+          </button>
+          ${isOwner ? `<button class="btn-danger btn-sm" onclick="deleteArticle(${a.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            删除
+          </button>` : ''}
+        </div>
+      </div>
+      <div class="academy-full-content" id="ac-content-${a.id}" style="display:none">
+        <div class="academy-divider"></div>
+        <div class="academy-content-text">${(a.content || '').replace(/\n/g,'<br>')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterAcademy(category) {
+  document.querySelectorAll('#academy-tabs .tab').forEach((el, i) => {
+    const cats = ['全部','运营经验','选品技巧','物流仓储','广告投放','数据分析','其他'];
+    el.classList.toggle('active', cats[i] === category);
+  });
+  const filtered = category === '全部' ? academyArticles : academyArticles.filter(a => a.category === category);
+  renderAcademyList(filtered);
+}
+
+function toggleArticle(id) {
+  const el = document.getElementById('ac-content-' + id);
+  const btn = el.previousElementSibling.querySelector('.academy-expand-btn');
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (btn) btn.innerHTML = isOpen
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg> 展开阅读'
+    : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg> 收起';
+}
+
+async function submitArticle() {
+  const title = document.getElementById('article-title').value.trim();
+  const content = document.getElementById('article-content').value.trim();
+  const category = document.getElementById('article-category').value;
+
+  if (!title) { showToast('请输入文章标题', 'error'); return; }
+  if (!content) { showToast('请输入文章内容', 'error'); return; }
+  if (!CURRENT_USER) { showToast('请先登录', 'error'); return; }
+
+  const article = {
+    title, content, category,
+    author_id: CURRENT_USER.id,
+    author_name: CURRENT_USER.nickname || CURRENT_USER.phone,
+    likes: 0,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    if (SUPABASE_ENABLED) {
+      await sbFetch('academy', 'POST', article);
+    } else {
+      const list = Cache.get('academy_articles', []);
+      article.id = Date.now();
+      list.unshift(article);
+      Cache.set('academy_articles', list);
+    }
+    closeModal('modal-add-article');
+    document.getElementById('article-title').value = '';
+    document.getElementById('article-content').value = '';
+    showToast('文章发布成功！', 'success');
+    await loadAcademyArticles();
+  } catch(e) {
+    showToast('发布失败：' + e.message, 'error');
+  }
+}
+
+async function deleteArticle(id) {
+  if (!confirm('确定要删除这篇文章吗？')) return;
+  try {
+    if (SUPABASE_ENABLED) {
+      await sbFetch('academy?id=eq.' + id, 'DELETE');
+    } else {
+      const list = Cache.get('academy_articles', []).filter(a => a.id !== id);
+      Cache.set('academy_articles', list);
+    }
+    showToast('文章已删除', 'info');
+    await loadAcademyArticles();
+  } catch(e) {
+    showToast('删除失败：' + e.message, 'error');
+  }
+}
+
+// ============================================
+//  页面：权限管理（仅管理员）
+// ============================================
+async function renderAdmin() {
+  const pg = document.getElementById('page-admin');
+  if (!CURRENT_USER || CURRENT_USER.role !== 'admin') {
+    pg.innerHTML = `<div class="empty-state"><p style="color:#f87171">仅管理员可访问</p></div>`;
+    return;
+  }
+
+  pg.innerHTML = `
+    <div class="page-header">
+      <h1 style="display:flex;align-items:center;gap:10px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#ag1)" stroke-width="2"><defs><linearGradient id="ag1" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        权限管理
+      </h1>
+      <p style="color:#64748b;font-size:13px;margin-top:4px">管理成员账号及页面访问权限</p>
+    </div>
+    <div id="admin-user-list">
+      <div class="card"><div class="skeleton" style="height:200px"></div></div>
+    </div>`;
+
+  await loadAdminUsers();
+}
+
+async function loadAdminUsers() {
+  const container = document.getElementById('admin-user-list');
+  try {
+    // 使用 auth.js 提供的聚合方法，同时获取本地+Supabase 用户
+    const users = await getAllUsersForAdmin();
+    const allPerms = await getAllPermsForAdmin();
+
+    if (!users || users.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5" style="margin-bottom:10px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <p style="color:#475569">暂无注册成员</p>
+          <p style="font-size:12px;color:#334155;margin-top:6px">成员注册后会在此显示，可在这里管理权限</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = users.map(u => {
+      const userPerms = allPerms.filter(p => p.user_id === u.id).map(p => p.page);
+      // 同步本地缓存
+      const localPerm = typeof LocalPerms !== 'undefined' ? LocalPerms.get(u.id) : [];
+      const effectivePerms = [...new Set([...userPerms, ...localPerm])];
+
+      const isAdmin = u.role === 'admin';
+      const isSelf = CURRENT_USER && u.id === CURRENT_USER.id;
+      const regDate = u.created_at ? new Date(u.created_at).toLocaleDateString('zh-CN') : '-';
+      const hasAnyPerm = effectivePerms.length > 0;
+      return `
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap">
+          <div class="sidebar-user-avatar" style="width:40px;height:40px;font-size:16px;flex-shrink:0">${(u.nickname||u.phone).charAt(0).toUpperCase()}</div>
+          <div style="flex:1;min-width:120px">
+            <div style="font-weight:600;color:#e2e8f0;font-size:15px">
+              ${u.nickname || '未设置昵称'}
+              ${isSelf ? '<span style="font-size:11px;color:#7c3aed;margin-left:6px">(你)</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:#475569;margin-top:3px">
+              手机号：${u.phone} &nbsp;|&nbsp; 注册时间：${regDate}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="badge ${isAdmin ? 'badge-purple' : 'badge-blue'}">${isAdmin ? '管理员' : '成员'}</span>
+            <span class="badge ${u.status === 'active' ? 'badge-green' : 'badge-red'}">${u.status === 'active' ? '正常' : '已禁用'}</span>
+            ${!hasAnyPerm && !isAdmin ? '<span class="badge" style="background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)">待授权</span>' : ''}
+            ${!isSelf && !isAdmin ? `
+              <button class="btn-secondary btn-sm" onclick="toggleUserStatus('${u.id}','${u.status || 'active'}')">
+                ${u.status === 'disabled' ? '启用账号' : '禁用账号'}
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
+        ${!isAdmin ? `
+        <div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            页面访问权限：
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${ALL_PAGES.map(page => {
+              const hasPerm = effectivePerms.includes(page);
+              return `<label class="perm-toggle" title="${hasPerm ? '点击收回'+PAGE_NAMES[page]+'权限' : '点击开放'+PAGE_NAMES[page]+'权限'}">
+                <input type="checkbox" ${hasPerm ? 'checked' : ''} onchange="handlePermChange('${u.id}','${page}',this)">
+                <span class="perm-label ${hasPerm ? 'perm-on' : 'perm-off'}">${PAGE_NAMES[page]}</span>
+              </label>`;
+            }).join('')}
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button class="btn-secondary btn-sm" onclick="grantAllPerms('${u.id}')">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-1px"><polyline points="20 6 9 17 4 12"/></svg>
+              全部开放
+            </button>
+            <button class="btn-secondary btn-sm" onclick="revokeAllPerms('${u.id}')">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-1px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              全部收回
+            </button>
+          </div>
+        </div>
+        ` : '<div style="font-size:12px;color:#a78bfa;padding:4px 0">超级管理员，拥有全部权限</div>'}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><p style="color:#f87171">加载失败：${e.message}</p></div>`;
+  }
+}
+
+// 权限 checkbox 变化处理（带即时视觉反馈）
+function handlePermChange(userId, page, checkbox) {
+  const label = checkbox.nextElementSibling;
+  if (checkbox.checked) {
+    label.className = 'perm-label perm-on';
+  } else {
+    label.className = 'perm-label perm-off';
+  }
+  togglePermission(userId, page, checkbox.checked);
+}
+
+// grantAllPerms / revokeAllPerms / toggleUserStatus 已移入 auth.js，此处保留空函数做兼容
+
+// ============================================
+//  页面：个人中心
+// ============================================
+function renderProfile() {
+  const pg = document.getElementById('page-profile');
+  if (!CURRENT_USER) return;
+  const perms = CURRENT_USER.permissions || [];
+  const isAdmin = CURRENT_USER.role === 'admin';
+
+  pg.innerHTML = `
+    <div class="page-header">
+      <h1>个人中心</h1>
+    </div>
+    <div style="max-width:480px">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">账号信息</div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+          <div class="sidebar-user-avatar" style="width:56px;height:56px;font-size:22px;border-radius:50%">${(CURRENT_USER.nickname||CURRENT_USER.phone).charAt(0).toUpperCase()}</div>
+          <div>
+            <div style="font-size:18px;font-weight:700;color:#e2e8f0">${CURRENT_USER.nickname || '未设置昵称'}</div>
+            <div style="font-size:13px;color:#475569;margin-top:3px">${CURRENT_USER.phone}</div>
+            <span class="badge ${isAdmin ? 'badge-purple' : 'badge-blue'}" style="margin-top:6px;display:inline-block">${isAdmin ? '管理员' : '成员'}</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>修改昵称</label>
+          <input type="text" id="profile-nickname" value="${CURRENT_USER.nickname || ''}" placeholder="输入新昵称">
+        </div>
+        <div class="form-group">
+          <label>新密码（留空不修改）</label>
+          <input type="password" id="profile-newpass" placeholder="至少6位新密码">
+        </div>
+        <button class="btn-primary" onclick="saveProfile()">保存修改</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">我的权限</div>
+        ${isAdmin
+          ? '<p style="color:#a78bfa;font-size:13px">管理员拥有全部页面权限</p>'
+          : perms.length === 0
+            ? '<p style="color:#f87171;font-size:13px">暂无任何页面权限，请联系管理员授权</p>'
+            : `<div style="display:flex;flex-wrap:wrap;gap:8px">${perms.map(p => `<span class="badge badge-green" style="font-size:12px">${PAGE_NAMES[p]||p}</span>`).join('')}</div>`
+        }
+      </div>
+    </div>`;
+}
+
+async function saveProfile() {
+  const nickname = document.getElementById('profile-nickname').value.trim();
+  const newPass = document.getElementById('profile-newpass').value;
+
+  if (!nickname && !newPass) { showToast('没有要修改的内容', 'info'); return; }
+  if (newPass && newPass.length < 6) { showToast('新密码至少6位', 'error'); return; }
+
+  const updates = {};
+  if (nickname) updates.nickname = nickname;
+  if (newPass) updates.password_hash = hashPassword(newPass);
+
+  try {
+    if (SUPABASE_ENABLED) {
+      await sbFetch('users?id=eq.' + CURRENT_USER.id, 'PATCH', updates);
+    }
+    Object.assign(CURRENT_USER, updates);
+    document.getElementById('user-name').textContent = CURRENT_USER.nickname || CURRENT_USER.phone;
+    document.getElementById('user-avatar').textContent = (CURRENT_USER.nickname || CURRENT_USER.phone).charAt(0).toUpperCase();
+    showToast('个人信息已更新', 'success');
+    document.getElementById('profile-newpass').value = '';
+  } catch(e) {
+    showToast('保存失败：' + e.message, 'error');
+  }
+}
+
