@@ -4,6 +4,101 @@ let currentParam = null;
 let charts = {};
 let bigScreenMode = false;
 
+// ============ 货币体系 ============
+// 国内平台用人民币，跨境平台用美元
+const DOMESTIC_PLATFORMS = new Set(['淘宝','天猫','京东','拼多多','抖音小店','快手小店','小红书','唯品会','其他国内']);
+const CROSS_BORDER_PLATFORMS = new Set(['SHEIN','Amazon','Temu','TikTok Shop','Shopee','Lazada','AliExpress','Wish','eBay','Etsy','独立站','其他跨境']);
+
+// 判断平台货币
+function getPlatformCurrency(platform) {
+  return DOMESTIC_PLATFORMS.has(platform) ? 'CNY' : 'USD';
+}
+
+// 当前汇率（默认7.2，实时更新）
+let USD_TO_CNY = 7.2;
+let exchangeRateUpdatedAt = null;
+
+// 获取实时汇率（免费API）
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    if (!res.ok) throw new Error('汇率接口异常');
+    const data = await res.json();
+    if (data.rates && data.rates.CNY) {
+      USD_TO_CNY = data.rates.CNY;
+      exchangeRateUpdatedAt = new Date();
+      updateExchangeRateDisplay();
+      console.log('[汇率] 已更新：1 USD =', USD_TO_CNY.toFixed(4), 'CNY');
+    }
+  } catch(e) {
+    // 备用汇率接口
+    try {
+      const res2 = await fetch('https://open.er-api.com/v6/latest/USD');
+      const data2 = await res2.json();
+      if (data2.rates && data2.rates.CNY) {
+        USD_TO_CNY = data2.rates.CNY;
+        exchangeRateUpdatedAt = new Date();
+        updateExchangeRateDisplay();
+      }
+    } catch(e2) {
+      console.warn('[汇率] 获取失败，使用默认值 7.2，原因：', e.message);
+    }
+  }
+}
+
+// 更新顶栏汇率显示
+function updateExchangeRateDisplay() {
+  const el = document.getElementById('exchange-rate-display');
+  if (el) {
+    el.textContent = `1 USD = ¥${USD_TO_CNY.toFixed(2)}`;
+    el.title = exchangeRateUpdatedAt ? `更新时间：${exchangeRateUpdatedAt.toLocaleTimeString()}` : '实时汇率';
+  }
+}
+
+// 格式化金额（自动识别货币）
+function fmtMoneyByCurrency(amount, currency) {
+  if (currency === 'USD') {
+    return '$' + (amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return '¥' + (amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// 将任意金额统一折算为人民币（用于汇总对比）
+function toCNY(amount, currency) {
+  if (currency === 'USD') return (amount || 0) * USD_TO_CNY;
+  return amount || 0;
+}
+
+// 根据 shopId 获取该店铺的货币
+function getShopCurrency(shopId) {
+  const shop = DB.getShops().find(s => s.id === shopId);
+  if (!shop) return 'CNY';
+  return getPlatformCurrency(shop.platform);
+}
+
+// ============ 全局格式化工具函数 ============
+// fmtMoney：格式化金额，默认人民币（向后兼容）
+function fmtMoney(amount, currency) {
+  const cur = currency || 'CNY';
+  if (cur === 'USD') {
+    return '$' + (amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  const n = amount || 0;
+  if (n >= 10000) return '¥' + (n / 10000).toFixed(1) + 'w';
+  return '¥' + n.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+// fmt：格式化数字（订单量等）
+function fmt(n) {
+  if (!n) return '0';
+  if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+  return n.toLocaleString('zh-CN');
+}
+
+
+
+
+
 // 面包屑配置
 const PAGE_META = {
   dashboard:    { label: '数据看板',    icon: '' },
@@ -37,6 +132,10 @@ async function initMainApp() {
   initRipple();
   updateTopbarDate();
   setInterval(updateTopbarDate, 60000);
+
+  // 获取实时汇率，每小时刷新一次
+  fetchExchangeRate();
+  setInterval(fetchExchangeRate, 60 * 60 * 1000);
 
   if (SUPABASE_ENABLED) {
     renderShopNav();
@@ -166,7 +265,7 @@ function progressDone() {
 function updateBreadcrumb(page, param) {
   const bc = document.getElementById('breadcrumb');
   const meta = PAGE_META[page] || { label: page, icon: '' };
-  let crumbs = `<span class="bc-home">🛍️ SHEIN数据中台</span>`;
+  let crumbs = `<span class="bc-home">🛒 电商数据平台</span>`;
   crumbs += `<span class="bc-sep"> › </span>`;
   crumbs += `<span class="bc-cur">${meta.icon} ${meta.label}</span>`;
   if (page === 'shop-detail' && param) {
@@ -1025,18 +1124,23 @@ function renderShops() {
     <div class="shop-grid">
       ${shops.map(shop => {
         const s = sumMap[shop.id] || {};
+        const currency = getPlatformCurrency(shop.platform);
+        const isDomestic = DOMESTIC_PLATFORMS.has(shop.platform);
+        const currencyTag = isDomestic
+          ? `<span style="font-size:10px;background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);border-radius:3px;padding:1px 5px">¥ 人民币</span>`
+          : `<span style="font-size:10px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:3px;padding:1px 5px">$ 美元</span>`;
         return `
         <div class="shop-card" onclick="navigate('shop-detail','${shop.id}')">
           <div class="shop-card-header">
             <div>
               <div class="shop-name">${shop.name}</div>
-              <div class="shop-meta">${shop.platform} · ${shop.id}</div>
+              <div class="shop-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${shop.platform} ${currencyTag}</div>
             </div>
             <div style="width:12px;height:12px;border-radius:50%;background:${shop.color};margin-top:4px"></div>
           </div>
           <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,(s.revenue||0)/5000)}%;background:${shop.color}"></div></div>
           <div class="shop-stats">
-            <div class="shop-stat"><div class="shop-stat-val" style="color:${shop.color}">${fmtMoney(s.revenue||0)}</div><div class="shop-stat-label">近30天营业额</div></div>
+            <div class="shop-stat"><div class="shop-stat-val" style="color:${shop.color}">${fmtMoney(s.revenue||0, currency)}</div><div class="shop-stat-label">近30天营业额</div></div>
             <div class="shop-stat"><div class="shop-stat-val">${fmt(s.orders||0)}</div><div class="shop-stat-label">近30天订单</div></div>
             <div class="shop-stat"><div class="shop-stat-val">${s.styles||0}</div><div class="shop-stat-label">在售款式</div></div>
             <div class="shop-stat"><div class="shop-stat-val">${s.orders ? (s.refundOrders/s.orders*100).toFixed(1):'0'}%</div><div class="shop-stat-label">退款率</div></div>
@@ -1057,6 +1161,11 @@ function renderShopDetail(shopId) {
   const shop = DB.getShops().find(s => s.id === shopId);
   if (!shop) { pg.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>店铺不存在</p></div>'; return; }
 
+  const currency = getPlatformCurrency(shop.platform);
+  const isDomestic = DOMESTIC_PLATFORMS.has(shop.platform);
+  const currencyLabel = isDomestic ? '人民币 ¥' : '美元 $';
+  const currencyColor = isDomestic ? '#34d399' : '#f59e0b';
+
   const data30 = aggregateSales({ shopId, startDate: getPastDate(30), endDate: getPastDate(0) });
   const totalRev = data30.reduce((s,d) => s+d.revenue, 0);
   const totalOrd = data30.reduce((s,d) => s+d.orders, 0);
@@ -1069,14 +1178,15 @@ function renderShopDetail(shopId) {
         <div style="width:16px;height:16px;border-radius:50%;background:${shop.color}"></div>
         <h1>${shop.name}</h1>
         <span class="badge badge-blue">${shop.platform}</span>
+        <span style="font-size:11px;background:rgba(0,0,0,0.2);color:${currencyColor};border:1px solid ${currencyColor}44;border-radius:4px;padding:2px 7px">${currencyLabel}</span>
       </div>
       <button class="btn-secondary" onclick="navigate('shops')">← 返回</button>
     </div>
     <div class="stat-grid">
-      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">近30天营业额</div><div class="stat-value" style="color:${shop.color}">${fmtMoney(totalRev)}</div></div>
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">近30天营业额</div><div class="stat-value" style="color:${shop.color}">${fmtMoney(totalRev, currency)}</div></div>
       <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-label">近30天订单数</div><div class="stat-value">${fmt(totalOrd)}</div></div>
       <div class="stat-card"><div class="stat-icon">👗</div><div class="stat-label">在售款式数</div><div class="stat-value">${styleSum.length}</div></div>
-      <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-label">平均客单价</div><div class="stat-value">${fmtMoney(totalOrd ? totalRev/totalOrd : 0)}</div></div>
+      <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-label">平均客单价</div><div class="stat-value">${fmtMoney(totalOrd ? totalRev/totalOrd : 0, currency)}</div></div>
     </div>
     <div class="chart-grid">
       <div class="card"><div class="card-title" style="color:${shop.color}">📈 近30天营业额趋势</div><div class="chart-wrap"><canvas id="chart-detail-trend"></canvas></div></div>
@@ -1085,7 +1195,7 @@ function renderShopDetail(shopId) {
           <li class="rank-item">
             <span class="rank-num ${i<3?['top1','top2','top3'][i]:''}">${i+1}</span>
             <div class="rank-info"><div class="rank-name">${s.styleName}</div><div class="rank-detail">${fmt(s.orders)} 单</div></div>
-            <span class="rank-val">${fmtMoney(s.revenue)}</span>
+            <span class="rank-val">${fmtMoney(s.revenue, currency)}</span>
           </li>`).join('')}</ul>
       </div>
     </div>

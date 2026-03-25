@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SHEIN 跨境数据中台</title>
+<title>电商数据平台</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="style.css">
@@ -35,7 +35,7 @@
           </svg>
         </div>
         <div>
-          <div class="auth-logo-text">SHEIN 数据中台</div>
+          <div class="auth-logo-text">电商数据平台</div>
           <div class="auth-logo-sub">CROSS-BORDER ANALYTICS PLATFORM</div>
         </div>
       </div>
@@ -155,7 +155,7 @@
         </svg>
       </div>
       <div>
-        <div class="logo-text">SHEIN 数据中台</div>
+        <div class="logo-text">电商数据平台</div>
         <div class="logo-sub">CROSS-BORDER ANALYTICS</div>
       </div>
     </div>
@@ -268,6 +268,7 @@
       <div id="breadcrumb"></div>
       <div class="topbar-right">
         <span id="sync-status" style="font-size:12px;color:#94a3b8;margin-right:8px"></span>
+        <span id="exchange-rate-display" style="font-size:11px;color:#f59e0b;margin-right:8px;cursor:help;background:rgba(245,158,11,0.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(245,158,11,0.2)" title="实时汇率">1 USD = ¥7.20</span>
         <span id="topbar-date" class="topbar-date"></span>
         <button class="topbar-bigscreen" onclick="toggleBigScreen()" id="bigscreen-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
@@ -330,7 +331,33 @@
     <div class="form-group">
       <label>所属平台</label>
       <select id="new-shop-platform">
-        <option>SHEIN</option><option>Temu</option><option>AliExpress</option><option>其他</option>
+        <optgroup label="🇨🇳 国内平台（人民币 ¥）">
+          <option value="淘宝">淘宝</option>
+          <option value="天猫">天猫</option>
+          <option value="京东">京东</option>
+          <option value="拼多多">拼多多</option>
+          <option value="抖音小店">抖音小店</option>
+          <option value="快手小店">快手小店</option>
+          <option value="小红书">小红书</option>
+          <option value="唯品会">唯品会</option>
+        </optgroup>
+        <optgroup label="🌍 跨境平台（美元 $）">
+          <option value="SHEIN" selected>SHEIN</option>
+          <option value="Amazon">Amazon</option>
+          <option value="Temu">Temu</option>
+          <option value="TikTok Shop">TikTok Shop</option>
+          <option value="Shopee">Shopee</option>
+          <option value="Lazada">Lazada</option>
+          <option value="AliExpress">AliExpress</option>
+          <option value="Wish">Wish</option>
+          <option value="eBay">eBay</option>
+          <option value="Etsy">Etsy</option>
+          <option value="独立站">独立站</option>
+        </optgroup>
+        <optgroup label="其他">
+          <option value="其他国内">其他国内平台</option>
+          <option value="其他跨境">其他跨境平台</option>
+        </optgroup>
       </select>
     </div>
     <div class="form-group">
