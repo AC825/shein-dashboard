@@ -47,11 +47,13 @@ async function initMainApp() {
     updateSidebarFooter();
     navigate(currentPage, currentParam);
     initRealtime();
+    // 每30秒自动同步一次云端数据（确保多人实时可见）
     setInterval(async () => {
       await syncFromSupabase();
       renderShopNav();
       updateSidebarFooter();
-    }, 5 * 60 * 1000);
+      navigate(currentPage, currentParam); // 刷新当前页面显示
+    }, 30 * 1000);
   } else {
     renderShopNav();
     updateSidebarFooter();
@@ -398,7 +400,7 @@ function closeModal(id) {
 function openAddShop() { openModal('modal-add-shop'); }
 
 // ============ 添加店铺 ============
-function addShop() {
+async function addShop() {
   const name = document.getElementById('new-shop-name').value.trim();
   if (!name) { showToast('请输入店铺名称', 'error'); return; }
   const shops = DB.getShops();
@@ -411,12 +413,20 @@ function addShop() {
     color,
     status: 'active',
   };
-  DB.addShop(newShop);  // 使用新方法，直接单条 upsert 到云端
-  renderShopNav();
-  closeModal('modal-add-shop');
-  showToast(`🏪 店铺 "${name}" 添加成功，云端已同步`, 'success');
-  document.getElementById('new-shop-name').value = '';
-  if (currentPage === 'shops') renderShops();
+  try {
+    await DB.addShop(newShop);  // 等待云端写入完成
+    renderShopNav();
+    closeModal('modal-add-shop');
+    document.getElementById('new-shop-name').value = '';
+    if (currentPage === 'shops') renderShops();
+    showToast(`🏪 店铺 "${name}" 添加成功，其他人30秒内可见`, 'success');
+  } catch(e) {
+    showToast(`⚠️ 店铺已本地保存，但云端同步失败：${e.message}`, 'error');
+    renderShopNav();
+    closeModal('modal-add-shop');
+    document.getElementById('new-shop-name').value = '';
+    if (currentPage === 'shops') renderShops();
+  }
 }
 
 // ============ 删除店铺 ============

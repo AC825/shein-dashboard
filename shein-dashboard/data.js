@@ -57,12 +57,12 @@ const DB = {
     Cache.set('shops', shops);
     if (SUPABASE_ENABLED) _pushShops(shops);
   },
-  // 新增单个店铺（直接 upsert，比全量更新更可靠）
-  addShop(shop) {
+  // 新增单个店铺（直接 upsert，比全量更新更可靠，返回 Promise）
+  async addShop(shop) {
     const shops = this.getShops();
     shops.push(shop);
     Cache.set('shops', shops);
-    if (SUPABASE_ENABLED) _pushSingleShop(shop);
+    if (SUPABASE_ENABLED) await _pushSingleShop(shop);
   },
   // 删除店铺（同时删云端）
   removeShop(shopId) {
@@ -103,17 +103,16 @@ async function _pushShops(shops) {
 }
 
 async function _pushSingleShop(shop) {
-  try {
-    const normalized = {
-      id: shop.id,
-      name: shop.name,
-      platform: shop.platform || 'SHEIN',
-      region: shop.region || null,
-      color: shop.color || '#6366f1',
-      status: shop.status || 'active',
-    };
-    await sbFetch('shops', 'POST', normalized, { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
-  } catch(e) { console.warn('[Supabase] 单店铺同步失败:', e.message); }
+  const normalized = {
+    id: shop.id,
+    name: shop.name,
+    platform: shop.platform || 'SHEIN',
+    region: shop.region || null,
+    color: shop.color || '#6366f1',
+    status: shop.status || 'active',
+  };
+  // 不 try/catch，让错误向上传递
+  await sbFetch('shops', 'POST', normalized, { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
 }
 
 async function _deleteShopFromCloud(shopId) {
@@ -152,11 +151,9 @@ async function syncFromSupabase() {
   try {
     showSyncStatus('⟳ 正在同步云端数据...');
 
-    // 拉取店铺
+    // 拉取店铺（无条件覆盖本地缓存，确保最新）
     const shops = await sbFetch('shops?select=*&order=id');
-    if (shops && shops.length > 0) {
-      Cache.set('shops', shops);
-    }
+    Cache.set('shops', Array.isArray(shops) ? shops : []);
 
     // 拉取销售数据（分页，每次1000条）
     const allSales = [];
