@@ -5,7 +5,7 @@
 
 // ★ 配置区域：在 Supabase 控制台获取这两个值并填入 ★
 const SUPABASE_URL  = 'https://mcxdvhdyrgqxiuptbjjo.supabase.co';
-const SUPABASE_KEY  = 'sb_publishable_YkX9oxAmJswTMIDCrAQdZA_n-QFlE-O';
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jeGR2aGR5cmdxeGl1cHRiampvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNTAyNzMsImV4cCI6MjA4OTkyNjI3M30.vata48k1YrEyGlRivFX-9nBt0usmOGKrejQrEYaFs84';
 
 // 是否已配置 Supabase
 const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_KEY);

@@ -323,14 +323,14 @@ async function doRegister() {
       created_at: new Date().toISOString(),
     };
 
-    // 保存到本地
+    // 先保存到 Supabase（主要），再保存本地（缓存）
+    if (SUPABASE_ENABLED) {
+      await sbFetch('users', 'POST', newUser);  // 失败会抛出错误，不再静默忽略
+    }
+
+    // 本地也保存一份
     LocalUsers.add(newUser);
     LocalPerms.set(newUser.id, []);
-
-    // 保存到 Supabase
-    if (SUPABASE_ENABLED) {
-      try { await sbFetch('users', 'POST', newUser); } catch(e) {}
-    }
 
     CURRENT_USER = newUser;
     CURRENT_USER.permissions = [];
@@ -475,44 +475,53 @@ async function getAllPermsForAdmin() {
 // ======== 管理员操作：切换用户权限 ========
 async function togglePermission(userId, page, grant) {
   try {
-    if (grant) {
-      LocalPerms.grant(userId, page);
-      if (SUPABASE_ENABLED) {
-        try {
-          await sbFetch('permissions', 'POST', { user_id: userId, page, granted_by: CURRENT_USER.id });
-        } catch(e) {}
-      }
-    } else {
-      LocalPerms.revoke(userId, page);
-      if (SUPABASE_ENABLED) {
-        try {
-          await sbFetch('permissions?user_id=eq.' + userId + '&page=eq.' + page, 'DELETE');
-        } catch(e) {}
+    // 先写云端（如果有），再写本地
+    if (SUPABASE_ENABLED) {
+      if (grant) {
+        // 先删后插，防止重复
+        try { await sbFetch('permissions?user_id=eq.' + userId + '&page=eq.' + page, 'DELETE'); } catch(e) {}
+        await sbFetch('permissions', 'POST', { user_id: userId, page, granted_by: CURRENT_USER.id });
+      } else {
+        await sbFetch('permissions?user_id=eq.' + userId + '&page=eq.' + page, 'DELETE');
       }
     }
-    showToast((grant ? '已开放' : '已收回') + ' 【' + PAGE_NAMES[page] + '】 权限', grant ? 'success' : 'info');
+    // 同步本地缓存
+    if (grant) { LocalPerms.grant(userId, page); }
+    else { LocalPerms.revoke(userId, page); }
+
+    showToast((grant ? '✅ 已开放' : '🔒 已收回') + ' 【' + PAGE_NAMES[page] + '】 权限（云端已同步）', grant ? 'success' : 'info');
   } catch(e) {
-    showToast('操作失败：' + e.message, 'error');
+    showToast('⚠️ 权限操作失败：' + e.message, 'error');
   }
 }
 
 async function grantAllPerms(userId) {
-  LocalPerms.grantAll(userId);
-  if (SUPABASE_ENABLED) {
-    for (const page of ALL_PAGES) {
-      try { await sbFetch('permissions', 'POST', { user_id: userId, page, granted_by: CURRENT_USER.id }); } catch(e) {}
+  try {
+    // 先清空再全量写入，避免重复
+    if (SUPABASE_ENABLED) {
+      try { await sbFetch('permissions?user_id=eq.' + userId, 'DELETE'); } catch(e) {}
+      for (const page of ALL_PAGES) {
+        await sbFetch('permissions', 'POST', { user_id: userId, page, granted_by: CURRENT_USER.id });
+      }
     }
+    LocalPerms.grantAll(userId);
+    showToast('✅ 已开放全部权限（云端已同步）', 'success');
+  } catch(e) {
+    showToast('⚠️ 操作失败：' + e.message, 'error');
   }
-  showToast('已开放全部权限', 'success');
   await loadAdminUsers();
 }
 
 async function revokeAllPerms(userId) {
-  LocalPerms.revokeAll(userId);
-  if (SUPABASE_ENABLED) {
-    try { await sbFetch('permissions?user_id=eq.' + userId, 'DELETE'); } catch(e) {}
+  try {
+    if (SUPABASE_ENABLED) {
+      await sbFetch('permissions?user_id=eq.' + userId, 'DELETE');
+    }
+    LocalPerms.revokeAll(userId);
+    showToast('🔒 已收回全部权限（云端已同步）', 'info');
+  } catch(e) {
+    showToast('⚠️ 操作失败：' + e.message, 'error');
   }
-  showToast('已收回全部权限', 'info');
   await loadAdminUsers();
 }
 
