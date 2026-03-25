@@ -42,6 +42,38 @@ const PAGE_NAMES = {
   academy: '知识学院'
 };
 
+// ======== 细粒度操作权限（在页面权限基础上进一步控制具体操作） ========
+// 格式：action_xxx
+const ALL_ACTIONS = [
+  'action_shop_create',     // 新建店铺
+  'action_shop_delete_own', // 删除自己创建的店铺
+  'action_shop_delete_all', // 删除任意店铺（含他人创建）
+  'action_data_import',     // 导入数据
+  'action_data_delete',     // 删除数据
+  'action_member_manage',   // 管理成员（查看权限管理页）
+];
+const ACTION_NAMES = {
+  action_shop_create:     '新建店铺',
+  action_shop_delete_own: '删除自己的店铺',
+  action_shop_delete_all: '删除任意店铺',
+  action_data_import:     '导入数据',
+  action_data_delete:     '删除数据',
+  action_member_manage:   '管理成员权限',
+};
+const ACTION_GROUPS = {
+  '店铺操作': ['action_shop_create','action_shop_delete_own','action_shop_delete_all'],
+  '数据操作': ['action_data_import','action_data_delete'],
+  '管理操作': ['action_member_manage'],
+};
+
+// 检查当前用户是否有某个操作权限
+function canDo(action) {
+  if (!CURRENT_USER) return false;
+  if (CURRENT_USER.role === 'admin') return true; // 管理员全开
+  const perms = CURRENT_USER.permissions || [];
+  return perms.includes(action);
+}
+
 // ======== 本地用户存储（离线模式） ========
 const LocalUsers = {
   _key: 'shein_local_users',
@@ -92,7 +124,15 @@ const LocalPerms = {
     this.set(userId, []);
   },
   grantAll(userId) {
-    this.set(userId, [...ALL_PAGES]);
+    this.set(userId, [...ALL_PAGES, ...ALL_ACTIONS]);
+  },
+  // 获取页面权限
+  getPages(userId) {
+    return this.get(userId).filter(p => !p.startsWith('action_'));
+  },
+  // 获取操作权限
+  getActions(userId) {
+    return this.get(userId).filter(p => p.startsWith('action_'));
   }
 };
 
@@ -497,10 +537,9 @@ async function togglePermission(userId, page, grant) {
 
 async function grantAllPerms(userId) {
   try {
-    // 先清空再全量写入，避免重复
     if (SUPABASE_ENABLED) {
       try { await sbFetch('permissions?user_id=eq.' + userId, 'DELETE'); } catch(e) {}
-      for (const page of ALL_PAGES) {
+      for (const page of [...ALL_PAGES, ...ALL_ACTIONS]) {
         await sbFetch('permissions', 'POST', { user_id: userId, page, granted_by: CURRENT_USER.id });
       }
     }

@@ -500,6 +500,11 @@ function openAddShop() { openModal('modal-add-shop'); }
 
 // ============ 添加店铺 ============
 async function addShop() {
+  // 检查新建店铺操作权限
+  if (!canDo('action_shop_create')) {
+    showToast('⚠️ 您没有新建店铺的权限，请联系管理员授权', 'error');
+    return;
+  }
   const name = document.getElementById('new-shop-name').value.trim();
   if (!name) { showToast('请输入店铺名称', 'error'); return; }
   const shops = DB.getShops();
@@ -511,6 +516,8 @@ async function addShop() {
     platform: document.getElementById('new-shop-platform').value,
     color,
     status: 'active',
+    created_by: CURRENT_USER ? CURRENT_USER.id : null,  // 记录创建者
+    created_at: new Date().toISOString(),
   };
   try {
     await DB.addShop(newShop);  // 等待云端写入完成
@@ -530,7 +537,25 @@ async function addShop() {
 
 // ============ 删除店铺 ============
 function deleteShop(shopId) {
-  if (!confirm('确定要删除该店铺及其所有数据吗？此操作不可恢复。')) return;
+  const shop = DB.getShops().find(s => s.id === shopId);
+  if (!shop) return;
+
+  // 权限检查
+  const isAdmin = CURRENT_USER && CURRENT_USER.role === 'admin';
+  const isOwner = shop.created_by && CURRENT_USER && shop.created_by === CURRENT_USER.id;
+  const canDeleteAll = canDo('action_shop_delete_all');
+  const canDeleteOwn = canDo('action_shop_delete_own');
+
+  if (!isAdmin && !canDeleteAll && !(canDeleteOwn && isOwner)) {
+    if (canDeleteOwn && !isOwner) {
+      showToast('⚠️ 您只能删除自己创建的店铺', 'error');
+    } else {
+      showToast('⚠️ 您没有删除店铺的权限，请联系管理员授权', 'error');
+    }
+    return;
+  }
+
+  if (!confirm(`确定要删除店铺「${shop.name}」及其所有数据吗？此操作不可恢复。`)) return;
   DB.removeShop(shopId);  // 使用新方法，同时删云端
   let sales = DB.getSalesData().filter(d => d.shopId !== shopId);
   DB.setSalesData(sales);
@@ -1146,7 +1171,14 @@ function renderShops() {
             <div class="shop-stat"><div class="shop-stat-val">${s.orders ? (s.refundOrders/s.orders*100).toFixed(1):'0'}%</div><div class="shop-stat-label">退款率</div></div>
           </div>
           <div style="margin-top:12px;text-align:right">
-            <button class="btn-danger" onclick="event.stopPropagation();deleteShop('${shop.id}')">删除</button>
+            ${(() => {
+              const isAdmin = CURRENT_USER && CURRENT_USER.role === 'admin';
+              const isOwner = shop.created_by && CURRENT_USER && shop.created_by === CURRENT_USER.id;
+              const canDeleteAll = canDo('action_shop_delete_all');
+              const canDeleteOwn = canDo('action_shop_delete_own');
+              const showDel = isAdmin || canDeleteAll || (canDeleteOwn && isOwner);
+              return showDel ? `<button class="btn-danger" onclick="event.stopPropagation();deleteShop('${shop.id}')">删除</button>` : '';
+            })()}
           </div>
         </div>`;
       }).join('')}
@@ -1174,7 +1206,7 @@ function renderShopDetail(shopId) {
 
   pg.innerHTML = `
     <div class="header-row">
-      <div style="display:flex;align-items:center;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <div style="width:16px;height:16px;border-radius:50%;background:${shop.color}"></div>
         <h1>${shop.name}</h1>
         <span class="badge badge-blue">${shop.platform}</span>
@@ -1182,7 +1214,21 @@ function renderShopDetail(shopId) {
       </div>
       <button class="btn-secondary" onclick="navigate('shops')">← 返回</button>
     </div>
-    <div class="stat-grid">
+
+    ${isDomestic ? `
+    <!-- 国内店铺：生意参谋模式 -->
+    <div id="domestic-detail-area">
+      ${renderDomesticDetail(shop)}
+    </div>
+    ` : `
+    <!-- 跨境店铺：每日数据 + 商品管理 -->
+    <div id="domestic-detail-area">
+      ${renderCrossBorderDetail(shop)}
+    </div>
+    <!-- 跨境传统款式分析（折叠） -->
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;color:#64748b;font-size:13px;padding:8px 0;user-select:none">📊 款式销售数据（旧版导入数据）</summary>
+    <div class="stat-grid" style="margin-top:12px">
       <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">近30天营业额</div><div class="stat-value" style="color:${shop.color}">${fmtMoney(totalRev, currency)}</div></div>
       <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-label">近30天订单数</div><div class="stat-value">${fmt(totalOrd)}</div></div>
       <div class="stat-card"><div class="stat-icon">👗</div><div class="stat-label">在售款式数</div><div class="stat-value">${styleSum.length}</div></div>
@@ -1199,50 +1245,799 @@ function renderShopDetail(shopId) {
           </li>`).join('')}</ul>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title">📋 款式明细表</div>
-      <div class="filter-bar" style="background:transparent;padding:0;box-shadow:none;margin-bottom:12px">
-        <label>月份查询：</label>
-        <select id="detail-month" onchange="filterDetailMonth('${shopId}')">
-          <option value="">近30天</option>
-          <option value="2026-03">2026年3月</option>
-          <option value="2026-02">2026年2月</option>
-          <option value="2026-01">2026年1月</option>
-          <option value="2025-12">2025年12月</option>
-          <option value="2025-11">2025年11月</option>
-        </select>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>款式名称</th><th>订单量</th><th>营业额</th><th>退款单</th><th>均价</th><th>占比</th></tr></thead>
-        <tbody id="detail-style-tbody">${styleSum.map(s => `
-          <tr>
-            <td><strong>${s.styleName}</strong></td>
-            <td>${fmt(s.orders)}</td>
-            <td style="color:${shop.color};font-weight:700">${fmtMoney(s.revenue)}</td>
-            <td>${s.orders > 0 ? Math.floor(s.orders*0.05) : 0}</td>
-            <td>${fmtMoney(s.revenue / Math.max(s.orders,1))}</td>
-            <td>
-              <div style="display:flex;align-items:center;gap:6px">
-                <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${(s.revenue/Math.max(totalRev,1)*100).toFixed(0)}%;background:${shop.color}"></div></div>
-                <span style="font-size:11px;color:#9ca3af">${(s.revenue/Math.max(totalRev,1)*100).toFixed(1)}%</span>
-              </div>
-            </td>
-          </tr>`).join('')}
-        </tbody>
-      </table></div>
-    </div>`;
+    </details>
+    `}
+  `;
 
-  if (charts['detail-trend']) charts['detail-trend'].destroy();
-  charts['detail-trend'] = new Chart(document.getElementById('chart-detail-trend'), {
-    type: 'line',
-    data: { labels: byDate.map(d=>d.date.slice(5)), datasets: [{ label: '营业额', data: byDate.map(d=>d.revenue), borderColor: shop.color, backgroundColor: shop.color + '15', fill: true, tension: 0.4, pointRadius: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => '¥' + (v/1000).toFixed(1) + 'k' } } } }
-  });
+  if (!isDomestic) {
+    if (charts['detail-trend']) charts['detail-trend'].destroy();
+    charts['detail-trend'] = new Chart(document.getElementById('chart-detail-trend'), {
+      type: 'line',
+      data: { labels: byDate.map(d=>d.date.slice(5)), datasets: [{ label: '营业额', data: byDate.map(d=>d.revenue), borderColor: shop.color, backgroundColor: shop.color + '15', fill: true, tension: 0.4, pointRadius: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => '$' + (v).toFixed(0) } } } }
+    });
+  }
+  // 重置筛选状态
+  window._domesticFilter = '';
+  window._domesticFilterDate = '';
 }
 
-function filterDetailMonth(shopId) {
-  // 简化：重新渲染即可
-  renderShopDetail(shopId);
+// ============================================
+//  国内店铺：生意参谋数据管理（本地存储）
+// ============================================
+
+// 获取/保存店铺商品数据
+const ShopProductsDB = {
+  _key: (shopId) => 'ec_products_' + shopId,
+  getAll(shopId) {
+    try { return JSON.parse(localStorage.getItem(this._key(shopId)) || '[]'); } catch(e) { return []; }
+  },
+  save(shopId, list) { localStorage.setItem(this._key(shopId), JSON.stringify(list)); },
+  add(shopId, product) {
+    const list = this.getAll(shopId);
+    list.unshift(product);
+    this.save(shopId, list);
+    return list;
+  },
+  update(shopId, productId, updates) {
+    const list = this.getAll(shopId);
+    const idx = list.findIndex(p => p.id === productId);
+    if (idx >= 0) { Object.assign(list[idx], updates); this.save(shopId, list); }
+    return list;
+  },
+  remove(shopId, productId) {
+    const list = this.getAll(shopId).filter(p => p.id !== productId);
+    this.save(shopId, list);
+    return list;
+  }
+};
+
+// 获取/保存生意参谋日报数据
+const DomesticStatsDB = {
+  _key: (shopId) => 'ec_domestic_stats_' + shopId,
+  getAll(shopId) {
+    try { return JSON.parse(localStorage.getItem(this._key(shopId)) || '[]'); } catch(e) { return []; }
+  },
+  save(shopId, list) { localStorage.setItem(this._key(shopId), JSON.stringify(list)); },
+  upsert(shopId, row) {
+    // 按 date + product_id 唯一
+    const list = this.getAll(shopId);
+    const idx = list.findIndex(r => r.date === row.date && r.product_id === row.product_id);
+    if (idx >= 0) { list[idx] = { ...list[idx], ...row }; }
+    else { list.unshift(row); }
+    this.save(shopId, list);
+    return list;
+  },
+  remove(shopId, id) {
+    const list = this.getAll(shopId).filter(r => r.id !== id);
+    this.save(shopId, list);
+    return list;
+  }
+};
+
+// 国内店铺详情（含生意参谋表格）
+function renderDomesticDetail(shop) {
+  const shopId = shop.id;
+  const products = ShopProductsDB.getAll(shopId);
+  const stats = DomesticStatsDB.getAll(shopId);
+
+  // 当前选中的筛选项
+  const filterPid = window._domesticFilter || '';
+  const filterDate = window._domesticFilterDate || '';
+
+  // 过滤数据
+  let filtered = stats.filter(r => {
+    if (filterPid && r.product_id !== filterPid) return false;
+    if (filterDate && !r.date.startsWith(filterDate)) return false;
+    return true;
+  });
+
+  // 自动计算汇总
+  const sumVisitors = filtered.reduce((s,r) => s + (r.visitors||0), 0);
+  const sumPv = filtered.reduce((s,r) => s + (r.pv||0), 0);
+  const sumFav = filtered.reduce((s,r) => s + (r.fav_count||0), 0);
+  const sumPayAmt = filtered.reduce((s,r) => s + (r.pay_amount||0), 0);
+  const sumActualAmt = filtered.reduce((s,r) => s + (r.actual_pay||0), 0);
+  const sumRefundAmt = filtered.reduce((s,r) => s + (r.refund_amount||0), 0);
+  const sumRefundPpl = filtered.reduce((s,r) => s + (r.refund_count||0), 0);
+  // 广告汇总
+  const adTypes = ['zst','ztc','ylmf'];
+  const adNames = {zst:'全站推广', ztc:'直通车', ylmf:'引力魔方'};
+  const adColors = {zst:'#6366f1', ztc:'#f59e0b', ylmf:'#10b981'};
+  const adSum = {};
+  adTypes.forEach(t => {
+    adSum[t] = {
+      cost: filtered.reduce((s,r) => s + (r[t+'_cost']||0), 0),
+      imp: filtered.reduce((s,r) => s + (r[t+'_imp']||0), 0),
+      clk: filtered.reduce((s,r) => s + (r[t+'_clk']||0), 0),
+      fav: filtered.reduce((s,r) => s + (r[t+'_fav']||0), 0),
+      cart: filtered.reduce((s,r) => s + (r[t+'_cart']||0), 0),
+      order: filtered.reduce((s,r) => s + (r[t+'_order']||0), 0),
+      order_amt: filtered.reduce((s,r) => s + (r[t+'_order_amt']||0), 0),
+    };
+  });
+  const totalAdCost = adTypes.reduce((s,t) => s + adSum[t].cost, 0);
+  const roi = totalAdCost > 0 ? (sumActualAmt / totalAdCost).toFixed(2) : '-';
+  const uvVal = sumVisitors > 0 ? (sumActualAmt / sumVisitors).toFixed(2) : '-';
+  const grossProfit = sumActualAmt - totalAdCost;  // 简化：毛利 = 实际支付 - 广告花费
+  const grossRate = sumActualAmt > 0 ? (grossProfit / sumActualAmt * 100).toFixed(1) : '-';
+  const adRatio = sumPayAmt > 0 ? (totalAdCost / sumPayAmt * 100).toFixed(1) : '-';
+  const favRate = sumVisitors > 0 ? (sumFav / sumVisitors * 100).toFixed(1) : '-';
+
+  return `
+  <!-- 商品列表管理 -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title" style="margin:0">商品管理</div>
+      <button class="btn-secondary btn-sm" onclick="openAddProductModal('${shopId}')">+ 添加商品</button>
+    </div>
+    ${products.length === 0
+      ? `<div style="color:#475569;font-size:13px;text-align:center;padding:16px 0">暂无商品，点击"添加商品"开始</div>`
+      : `<div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${products.map(p => `
+          <div style="background:#1e293b;border:1px solid ${filterPid===p.id?shop.color:'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer;transition:all 0.2s"
+               onclick="setDomesticFilter('${shopId}','${p.id}','${filterDate}')">
+            <div style="font-weight:600;color:#e2e8f0;font-size:13px">${p.name}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">ID: ${p.product_id||'-'} | 编码: ${p.sku||'-'}</div>
+            <div style="display:flex;gap:6px;margin-top:5px">
+              <button style="font-size:11px;color:#94a3b8;background:transparent;border:none;cursor:pointer;padding:0" onclick="event.stopPropagation();openEditProductModal('${shopId}','${p.id}')">编辑</button>
+              <button style="font-size:11px;color:#f87171;background:transparent;border:none;cursor:pointer;padding:0" onclick="event.stopPropagation();removeProduct('${shopId}','${p.id}')">删除</button>
+            </div>
+          </div>`).join('')}
+        ${filterPid ? `<button class="btn-secondary btn-sm" onclick="setDomesticFilter('${shopId}','','${filterDate}')" style="align-self:center">全部商品</button>` : ''}
+      </div>`}
+  </div>
+
+  <!-- 汇总看板 -->
+  <div class="stat-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">总访客数</div><div class="stat-value" style="color:${shop.color}">${fmt(sumVisitors)}</div></div>
+    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">实际支付金额</div><div class="stat-value" style="color:#34d399">¥${sumActualAmt.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="stat-card"><div class="stat-icon">📢</div><div class="stat-label">广告总花费</div><div class="stat-value" style="color:#f87171">¥${totalAdCost.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-label">总ROI</div><div class="stat-value">${roi}</div></div>
+    <div class="stat-card"><div class="stat-icon">💎</div><div class="stat-label">UV价值</div><div class="stat-value">¥${uvVal}</div></div>
+    <div class="stat-card"><div class="stat-icon">📈</div><div class="stat-label">毛利（去广告）</div><div class="stat-value" style="color:${grossProfit>=0?'#34d399':'#f87171'}">¥${grossProfit.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="stat-card"><div class="stat-icon">%</div><div class="stat-label">毛利率</div><div class="stat-value">${grossRate}%</div></div>
+    <div class="stat-card"><div class="stat-icon">🎯</div><div class="stat-label">广告占比</div><div class="stat-value">${adRatio}%</div></div>
+  </div>
+
+  <!-- 广告效果对比卡片 -->
+  <div class="chart-grid" style="margin-bottom:16px">
+    ${adTypes.map(t => {
+      const d = adSum[t];
+      const ctr = d.imp > 0 ? (d.clk/d.imp*100).toFixed(2) : '-';
+      const addRate = d.clk > 0 ? (d.cart/d.clk*100).toFixed(2) : '-';
+      const adRoi = d.cost > 0 ? (d.order_amt/d.cost).toFixed(2) : '-';
+      const adUv = d.clk > 0 ? (d.order_amt/d.clk).toFixed(2) : '-';
+      return `
+      <div class="card">
+        <div class="card-title" style="color:${adColors[t]}">📺 ${adNames[t]}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">花费</div><div style="color:#f87171;font-weight:700;font-size:14px">¥${d.cost.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">ROI</div><div style="color:${adColors[t]};font-weight:700;font-size:14px">${adRoi}</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">展现量</div><div style="color:#e2e8f0;font-weight:600">${fmt(d.imp)}</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">点击量</div><div style="color:#e2e8f0;font-weight:600">${fmt(d.clk)}</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">点击率</div><div style="color:#a78bfa;font-weight:600">${ctr}%</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">加购率</div><div style="color:#a78bfa;font-weight:600">${addRate}%</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">收藏量</div><div style="color:#e2e8f0;font-weight:600">${fmt(d.fav)}</div></div>
+          <div style="background:#1e293b;border-radius:6px;padding:8px"><div style="color:#64748b">成交量</div><div style="color:#34d399;font-weight:600">${fmt(d.order)}</div></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <!-- 筛选 + 录入表格 -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div class="card-title" style="margin:0">生意参谋 · 数据明细</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <select onchange="setDomesticFilter('${shopId}','${filterPid}',this.value)" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:4px 8px;border-radius:6px;font-size:12px">
+          <option value="" ${!filterDate?'selected':''}>全部时间</option>
+          ${[...new Set([...getRecentMonths(6)])].map(m => `<option value="${m}" ${filterDate===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+        <select onchange="setDomesticFilter('${shopId}',this.value,'${filterDate}')" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:4px 8px;border-radius:6px;font-size:12px">
+          <option value="" ${!filterPid?'selected':''}>全部商品</option>
+          ${products.map(p => `<option value="${p.id}" ${filterPid===p.id?'selected':''}>${p.name}</option>`).join('')}
+        </select>
+        <button class="btn-secondary btn-sm" onclick="openAddStatModal('${shopId}')">+ 录入数据</button>
+        ${filtered.length > 0 ? `<button class="btn-secondary btn-sm" onclick="exportDomesticStats('${shopId}')">导出 CSV</button>` : ''}
+      </div>
+    </div>
+    ${filtered.length === 0
+      ? `<div style="text-align:center;color:#475569;padding:32px 0">
+          <div style="font-size:32px;margin-bottom:8px">📊</div>
+          <div>暂无数据，点击"录入数据"开始填写</div>
+        </div>`
+      : `<div class="table-wrap" style="overflow-x:auto">
+        <table style="min-width:1200px">
+          <thead>
+            <tr style="background:#1e293b">
+              <th rowspan="2" style="border-bottom:1px solid #334155">日期</th>
+              <th rowspan="2" style="border-bottom:1px solid #334155">商品</th>
+              <th colspan="7" style="text-align:center;background:#1e293b55;border-bottom:1px solid #334155;color:#7c3aed">生意参谋核心指标</th>
+              <th colspan="4" style="text-align:center;background:#6366f111;border-bottom:1px solid #334155;color:#6366f1">利润&广告汇总</th>
+              <th colspan="6" style="text-align:center;background:#6366f111;border-bottom:1px solid #334155;color:#6366f1">全站推广</th>
+              <th colspan="6" style="text-align:center;background:#f59e0b11;border-bottom:1px solid #334155;color:#f59e0b">直通车</th>
+              <th colspan="6" style="text-align:center;background:#10b98111;border-bottom:1px solid #334155;color:#10b981">引力魔方</th>
+              <th rowspan="2" style="border-bottom:1px solid #334155">操作</th>
+            </tr>
+            <tr style="background:#1e293b;font-size:11px;color:#64748b">
+              <th>访客数</th><th>浏览量</th><th>收藏人数</th><th>收藏率</th><th>支付金额</th><th>实际支付</th><th>退款金额</th>
+              <th>广告总费</th><th>总ROI</th><th>UV价值</th><th>毛利率</th>
+              <th>花费</th><th>展现</th><th>点击</th><th>点击率</th><th>加购率</th><th>ROI</th>
+              <th>花费</th><th>展现</th><th>点击</th><th>点击率</th><th>加购率</th><th>ROI</th>
+              <th>花费</th><th>展现</th><th>点击</th><th>点击率</th><th>加购率</th><th>ROI</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(r => {
+              const prod = products.find(p => p.id === r.product_id);
+              const rFavRate = r.visitors > 0 ? (r.fav_count/r.visitors*100).toFixed(1)+'%' : '-';
+              const rAdCost = (r.zst_cost||0) + (r.ztc_cost||0) + (r.ylmf_cost||0);
+              const rRoi = rAdCost > 0 ? (r.actual_pay/rAdCost).toFixed(2) : '-';
+              const rUv = r.visitors > 0 ? (r.actual_pay/r.visitors).toFixed(2) : '-';
+              const rGrossRate = r.actual_pay > 0 ? ((r.actual_pay-rAdCost)/r.actual_pay*100).toFixed(1)+'%' : '-';
+              const adRow = ['zst','ztc','ylmf'].map(t => {
+                const ctr = r[t+'_imp'] > 0 ? (r[t+'_clk']/r[t+'_imp']*100).toFixed(2)+'%' : '-';
+                const addR = r[t+'_clk'] > 0 ? (r[t+'_cart']/r[t+'_clk']*100).toFixed(2)+'%' : '-';
+                const roi2 = r[t+'_cost'] > 0 ? (r[t+'_order_amt']/r[t+'_cost']).toFixed(2) : '-';
+                return `<td>¥${(r[t+'_cost']||0).toFixed(2)}</td><td>${fmt(r[t+'_imp']||0)}</td><td>${fmt(r[t+'_clk']||0)}</td><td>${ctr}</td><td>${addR}</td><td>${roi2}</td>`;
+              }).join('');
+              return `<tr>
+                <td style="white-space:nowrap">${r.date}</td>
+                <td>${prod ? prod.name : (r.product_id||'-')}</td>
+                <td>${fmt(r.visitors||0)}</td>
+                <td>${fmt(r.pv||0)}</td>
+                <td>${fmt(r.fav_count||0)}</td>
+                <td>${rFavRate}</td>
+                <td>¥${(r.pay_amount||0).toFixed(2)}</td>
+                <td style="color:#34d399">¥${(r.actual_pay||0).toFixed(2)}</td>
+                <td style="color:#f87171">¥${(r.refund_amount||0).toFixed(2)}</td>
+                <td style="color:#f87171">¥${rAdCost.toFixed(2)}</td>
+                <td style="color:${shop.color}">${rRoi}</td>
+                <td>¥${rUv}</td>
+                <td>${rGrossRate}</td>
+                ${adRow}
+                <td>
+                  <button style="font-size:11px;color:#94a3b8;background:transparent;border:none;cursor:pointer" onclick="openEditStatModal('${shopId}','${r.id}')">编辑</button>
+                  <button style="font-size:11px;color:#f87171;background:transparent;border:none;cursor:pointer" onclick="removeStat('${shopId}','${r.id}')">删</button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`}
+  </div>
+
+  <!-- 录入数据弹窗 -->
+  <div id="modal-add-stat" class="modal" style="display:none">
+    <div class="modal-content" style="max-width:900px;max-height:90vh;overflow-y:auto">
+      <div class="modal-header">
+        <h3 id="stat-modal-title">录入生意参谋数据</h3>
+        <button onclick="closeModal('modal-add-stat')" class="close-btn">✕</button>
+      </div>
+      <div style="padding:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+          <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">统计日期 *</label>
+            <input type="date" id="stat-date" class="input-field" style="width:100%"></div>
+          <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">商品 *</label>
+            <select id="stat-product" class="input-field" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0">
+              <option value="">请选择商品</option>
+              ${products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+            </select></div>
+        </div>
+        <!-- 生意参谋 -->
+        <div style="background:#1e293b;border-radius:8px;padding:14px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:#a78bfa;margin-bottom:10px">生意参谋核心指标</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">访客数</label><input type="number" id="stat-visitors" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">浏览量</label><input type="number" id="stat-pv" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">收藏人数</label><input type="number" id="stat-fav" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">支付金额</label><input type="number" id="stat-pay-amount" class="input-field" placeholder="0.00" step="0.01"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">实际支付金额</label><input type="number" id="stat-actual-pay" class="input-field" placeholder="0.00" step="0.01"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">退款金额</label><input type="number" id="stat-refund-amount" class="input-field" placeholder="0.00" step="0.01"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">退款人数</label><input type="number" id="stat-refund-count" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">搜索引导支付买家</label><input type="number" id="stat-search-buyers" class="input-field" placeholder="0"></div>
+          </div>
+        </div>
+        <!-- 广告 3栏 -->
+        ${['zst','ztc','ylmf'].map((t,i) => `
+        <div style="background:#1e293b;border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid ${adColors[t]}">
+          <div style="font-size:13px;font-weight:600;color:${adColors[t]};margin-bottom:10px">${adNames[t]}</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">花费</label><input type="number" id="stat-${t}-cost" class="input-field" placeholder="0.00" step="0.01"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">展现量</label><input type="number" id="stat-${t}-imp" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">点击量</label><input type="number" id="stat-${t}-clk" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">收藏宝贝量</label><input type="number" id="stat-${t}-fav" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">加购物车量</label><input type="number" id="stat-${t}-cart" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">成交订单量</label><input type="number" id="stat-${t}-order" class="input-field" placeholder="0"></div>
+            <div><label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px">成交金额</label><input type="number" id="stat-${t}-order-amt" class="input-field" placeholder="0.00" step="0.01"></div>
+          </div>
+        </div>`).join('')}
+        <input type="hidden" id="stat-edit-id">
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:4px">
+          <button class="btn-secondary" onclick="closeModal('modal-add-stat')">取消</button>
+          <button class="btn-primary" onclick="saveStat('${shopId}')">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加/编辑商品弹窗 -->
+  <div id="modal-add-product" class="modal" style="display:none">
+    <div class="modal-content" style="max-width:480px">
+      <div class="modal-header">
+        <h3 id="product-modal-title">添加商品</h3>
+        <button onclick="closeModal('modal-add-product')" class="close-btn">✕</button>
+      </div>
+      <div style="padding:16px;display:grid;gap:12px">
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">商品名称 *</label>
+          <input type="text" id="product-name" class="input-field" placeholder="请输入商品名称"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">商品ID（平台ID）</label>
+          <input type="text" id="product-id-field" class="input-field" placeholder="如：123456789"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">商品编码（SKU）</label>
+          <input type="text" id="product-sku" class="input-field" placeholder="如：SKU-001"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">备注</label>
+          <input type="text" id="product-note" class="input-field" placeholder="可选"></div>
+        <input type="hidden" id="product-edit-id">
+        <div style="display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn-secondary" onclick="closeModal('modal-add-product')">取消</button>
+          <button class="btn-primary" onclick="saveProduct('${shopId}')">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+// 辅助：获取最近N个月的 YYYY-MM 列表
+function getRecentMonths(n) {
+  const result = [];
+  const now = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  }
+  return result;
+}
+
+// 设置筛选状态并重新渲染
+function setDomesticFilter(shopId, pid, date) {
+  window._domesticFilter = pid;
+  window._domesticFilterDate = date;
+  const pg = document.getElementById('page-shop-detail');
+  const shop = DB.getShops().find(s => s.id === shopId);
+  if (!shop) return;
+  // 只更新国内区域
+  const domesticEl = document.getElementById('domestic-detail-area');
+  if (domesticEl) {
+    domesticEl.innerHTML = renderDomesticDetail(shop);
+  }
+}
+
+// 商品增删改
+function openAddProductModal(shopId) {
+  document.getElementById('product-modal-title').textContent = '添加商品';
+  document.getElementById('product-name').value = '';
+  document.getElementById('product-id-field').value = '';
+  document.getElementById('product-sku').value = '';
+  document.getElementById('product-note').value = '';
+  document.getElementById('product-edit-id').value = '';
+  document.getElementById('modal-add-product').style.display = 'flex';
+}
+function openEditProductModal(shopId, productId) {
+  const prod = ShopProductsDB.getAll(shopId).find(p => p.id === productId);
+  if (!prod) return;
+  document.getElementById('product-modal-title').textContent = '编辑商品';
+  document.getElementById('product-name').value = prod.name || '';
+  document.getElementById('product-id-field').value = prod.product_id || '';
+  document.getElementById('product-sku').value = prod.sku || '';
+  document.getElementById('product-note').value = prod.note || '';
+  document.getElementById('product-edit-id').value = productId;
+  document.getElementById('modal-add-product').style.display = 'flex';
+}
+function saveProduct(shopId) {
+  const name = document.getElementById('product-name').value.trim();
+  if (!name) { showToast('请输入商品名称', 'error'); return; }
+  const editId = document.getElementById('product-edit-id').value;
+  const data = {
+    name,
+    product_id: document.getElementById('product-id-field').value.trim(),
+    sku: document.getElementById('product-sku').value.trim(),
+    note: document.getElementById('product-note').value.trim(),
+  };
+  if (editId) {
+    ShopProductsDB.update(shopId, editId, data);
+  } else {
+    data.id = 'prod_' + Date.now();
+    ShopProductsDB.add(shopId, data);
+  }
+  closeModal('modal-add-product');
+  setDomesticFilter(shopId, window._domesticFilter, window._domesticFilterDate);
+  showToast('商品已保存', 'success');
+}
+function removeProduct(shopId, productId) {
+  if (!confirm('确定删除该商品及关联数据吗？')) return;
+  ShopProductsDB.remove(shopId, productId);
+  setDomesticFilter(shopId, '', '');
+  showToast('已删除', 'info');
+}
+
+// 生意参谋数据录入
+function openAddStatModal(shopId) {
+  document.getElementById('stat-modal-title').textContent = '录入生意参谋数据';
+  document.getElementById('stat-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('stat-edit-id').value = '';
+  // 清空所有输入
+  ['visitors','pv','fav','pay-amount','actual-pay','refund-amount','refund-count','search-buyers'].forEach(k => {
+    const el = document.getElementById('stat-' + k);
+    if (el) el.value = '';
+  });
+  ['zst','ztc','ylmf'].forEach(t => {
+    ['cost','imp','clk','fav','cart','order','order-amt'].forEach(k => {
+      const el = document.getElementById(`stat-${t}-${k}`);
+      if (el) el.value = '';
+    });
+  });
+  document.getElementById('modal-add-stat').style.display = 'flex';
+}
+function openEditStatModal(shopId, statId) {
+  const r = DomesticStatsDB.getAll(shopId).find(s => s.id === statId);
+  if (!r) return;
+  document.getElementById('stat-modal-title').textContent = '编辑数据';
+  document.getElementById('stat-date').value = r.date || '';
+  document.getElementById('stat-product').value = r.product_id || '';
+  document.getElementById('stat-edit-id').value = statId;
+  const setV = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  setV('stat-visitors', r.visitors); setV('stat-pv', r.pv); setV('stat-fav', r.fav_count);
+  setV('stat-pay-amount', r.pay_amount); setV('stat-actual-pay', r.actual_pay);
+  setV('stat-refund-amount', r.refund_amount); setV('stat-refund-count', r.refund_count);
+  setV('stat-search-buyers', r.search_buyers);
+  ['zst','ztc','ylmf'].forEach(t => {
+    setV(`stat-${t}-cost`, r[t+'_cost']); setV(`stat-${t}-imp`, r[t+'_imp']);
+    setV(`stat-${t}-clk`, r[t+'_clk']); setV(`stat-${t}-fav`, r[t+'_fav']);
+    setV(`stat-${t}-cart`, r[t+'_cart']); setV(`stat-${t}-order`, r[t+'_order']);
+    setV(`stat-${t}-order-amt`, r[t+'_order_amt']);
+  });
+  document.getElementById('modal-add-stat').style.display = 'flex';
+}
+function saveStat(shopId) {
+  const date = document.getElementById('stat-date').value;
+  const product_id = document.getElementById('stat-product').value;
+  if (!date) { showToast('请选择日期', 'error'); return; }
+  const editId = document.getElementById('stat-edit-id').value;
+  const getN = (id) => parseFloat(document.getElementById(id)?.value || '0') || 0;
+  const row = {
+    id: editId || ('stat_' + Date.now()),
+    date, product_id,
+    visitors: getN('stat-visitors'), pv: getN('stat-pv'),
+    fav_count: getN('stat-fav'), pay_amount: getN('stat-pay-amount'),
+    actual_pay: getN('stat-actual-pay'), refund_amount: getN('stat-refund-amount'),
+    refund_count: getN('stat-refund-count'), search_buyers: getN('stat-search-buyers'),
+  };
+  ['zst','ztc','ylmf'].forEach(t => {
+    row[t+'_cost'] = getN(`stat-${t}-cost`); row[t+'_imp'] = getN(`stat-${t}-imp`);
+    row[t+'_clk'] = getN(`stat-${t}-clk`); row[t+'_fav'] = getN(`stat-${t}-fav`);
+    row[t+'_cart'] = getN(`stat-${t}-cart`); row[t+'_order'] = getN(`stat-${t}-order`);
+    row[t+'_order_amt'] = getN(`stat-${t}-order-amt`);
+  });
+  DomesticStatsDB.upsert(shopId, row);
+  closeModal('modal-add-stat');
+  setDomesticFilter(shopId, window._domesticFilter, window._domesticFilterDate);
+  showToast('数据已保存', 'success');
+}
+function removeStat(shopId, statId) {
+  if (!confirm('确定删除这条数据吗？')) return;
+  DomesticStatsDB.remove(shopId, statId);
+  setDomesticFilter(shopId, window._domesticFilter, window._domesticFilterDate);
+  showToast('已删除', 'info');
+}
+function exportDomesticStats(shopId) {
+  const stats = DomesticStatsDB.getAll(shopId);
+  const products = ShopProductsDB.getAll(shopId);
+  if (!stats.length) return;
+  const headers = ['日期','商品','访客数','浏览量','收藏人数','收藏率','支付金额','实际支付','退款金额','退款人数','广告总费','总ROI','UV价值','毛利率',
+    '全站花费','全站展现','全站点击','全站点击率','全站加购率','全站ROI',
+    '直通车花费','直通车展现','直通车点击','直通车点击率','直通车加购率','直通车ROI',
+    '引力魔方花费','引力魔方展现','引力魔方点击','引力魔方点击率','引力魔方加购率','引力魔方ROI'];
+  const rows = stats.map(r => {
+    const prod = products.find(p => p.id === r.product_id);
+    const rAdCost = (r.zst_cost||0)+(r.ztc_cost||0)+(r.ylmf_cost||0);
+    const row = [r.date, prod?prod.name:'', r.visitors||0, r.pv||0, r.fav_count||0,
+      r.visitors>0?(r.fav_count/r.visitors*100).toFixed(1)+'%':'-',
+      r.pay_amount||0, r.actual_pay||0, r.refund_amount||0, r.refund_count||0,
+      rAdCost.toFixed(2),
+      rAdCost>0?(r.actual_pay/rAdCost).toFixed(2):'-',
+      r.visitors>0?(r.actual_pay/r.visitors).toFixed(2):'-',
+      r.actual_pay>0?((r.actual_pay-rAdCost)/r.actual_pay*100).toFixed(1)+'%':'-'];
+    ['zst','ztc','ylmf'].forEach(t => {
+      const ctr = r[t+'_imp']>0?(r[t+'_clk']/r[t+'_imp']*100).toFixed(2)+'%':'-';
+      const addR = r[t+'_clk']>0?(r[t+'_cart']/r[t+'_clk']*100).toFixed(2)+'%':'-';
+      const roi2 = r[t+'_cost']>0?(r[t+'_order_amt']/r[t+'_cost']).toFixed(2):'-';
+      row.push(r[t+'_cost']||0, r[t+'_imp']||0, r[t+'_clk']||0, ctr, addR, roi2);
+    });
+    return row;
+  });
+  const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `生意参谋_${shopId}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ============================================
+//  跨境店铺：每日数据管理
+// ============================================
+
+const CrossBorderDailyDB = {
+  _key: (shopId) => 'ec_cb_daily_' + shopId,
+  getAll(shopId) {
+    try { return JSON.parse(localStorage.getItem(this._key(shopId)) || '[]'); } catch(e) { return []; }
+  },
+  save(shopId, list) { localStorage.setItem(this._key(shopId), JSON.stringify(list)); },
+  upsert(shopId, row) {
+    const list = this.getAll(shopId);
+    const idx = list.findIndex(r => r.date === row.date);
+    if (idx >= 0) { list[idx] = { ...list[idx], ...row }; }
+    else { list.unshift(row); list.sort((a,b) => b.date.localeCompare(a.date)); }
+    this.save(shopId, list);
+  },
+  remove(shopId, id) {
+    const list = this.getAll(shopId).filter(r => r.id !== id);
+    this.save(shopId, list);
+  }
+};
+
+// 渲染跨境店铺每日数据区域
+function renderCrossBorderDetail(shop) {
+  const shopId = shop.id;
+  const currency = getPlatformCurrency(shop.platform);
+  const currSymbol = currency === 'USD' ? '$' : '¥';
+  const filterMonth = window._cbFilterMonth || '';
+  let rows = CrossBorderDailyDB.getAll(shopId);
+  if (filterMonth) rows = rows.filter(r => r.date.startsWith(filterMonth));
+
+  // 汇总
+  const sumVisitors = rows.reduce((s,r) => s+(r.visitors||0), 0);
+  const sumBuyers = rows.reduce((s,r) => s+(r.buyers||0), 0);
+  const sumQty = rows.reduce((s,r) => s+(r.qty||0), 0);
+  const sumAmt = rows.reduce((s,r) => s+(r.amount||0), 0);
+  const avgConv = sumVisitors > 0 ? (sumBuyers/sumVisitors*100).toFixed(2) : '-';
+
+  return `
+  <!-- 商品管理（跨境也支持） -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title" style="margin:0">商品管理</div>
+      <button class="btn-secondary btn-sm" onclick="openAddProductModal('${shopId}')">+ 添加商品</button>
+    </div>
+    ${(() => {
+      const products = ShopProductsDB.getAll(shopId);
+      return products.length === 0
+        ? `<div style="color:#475569;font-size:13px;text-align:center;padding:16px 0">暂无商品，点击"添加商品"开始</div>`
+        : `<div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${products.map(p => `
+            <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px">
+              <div style="font-weight:600;color:#e2e8f0;font-size:13px">${p.name}</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px">货号: ${p.sku||'-'}</div>
+              <div style="display:flex;gap:6px;margin-top:5px">
+                <button style="font-size:11px;color:#94a3b8;background:transparent;border:none;cursor:pointer;padding:0" onclick="openEditProductModal('${shopId}','${p.id}')">编辑</button>
+                <button style="font-size:11px;color:#f87171;background:transparent;border:none;cursor:pointer;padding:0" onclick="removeProduct('${shopId}','${p.id}')">删除</button>
+              </div>
+            </div>`).join('')}
+        </div>`;
+    })()}
+  </div>
+
+  <!-- 汇总卡片 -->
+  <div class="stat-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">总访客量</div><div class="stat-value" style="color:${shop.color}">${fmt(sumVisitors)}</div></div>
+    <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-label">支付人数</div><div class="stat-value">${fmt(sumBuyers)}</div></div>
+    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-label">支付件数</div><div class="stat-value">${fmt(sumQty)}</div></div>
+    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">支付金额</div><div class="stat-value" style="color:#f59e0b">${currSymbol}${sumAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="stat-card"><div class="stat-icon">📈</div><div class="stat-label">成交转化率</div><div class="stat-value">${avgConv}%</div></div>
+    <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-label">客均价</div><div class="stat-value">${sumBuyers>0?currSymbol+(sumAmt/sumBuyers).toFixed(2):'-'}</div></div>
+  </div>
+
+  <!-- 每日数据表 -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div class="card-title" style="margin:0">每日运营数据</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <select onchange="setCBFilter('${shopId}',this.value)" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:4px 8px;border-radius:6px;font-size:12px">
+          <option value="" ${!filterMonth?'selected':''}>全部时间</option>
+          ${getRecentMonths(6).map(m => `<option value="${m}" ${filterMonth===m?'selected':''}>${m.replace('-','年')}月</option>`).join('')}
+        </select>
+        <button class="btn-secondary btn-sm" onclick="openAddCBDailyModal('${shopId}')">+ 录入每日数据</button>
+        <button class="btn-secondary btn-sm" onclick="openImportCBModal('${shopId}')">📤 批量导入</button>
+        ${rows.length > 0 ? `<button class="btn-secondary btn-sm" onclick="exportCBDaily('${shopId}')">导出 CSV</button>` : ''}
+      </div>
+    </div>
+
+    ${rows.length === 0
+      ? `<div style="text-align:center;color:#475569;padding:32px 0">
+          <div style="font-size:32px;margin-bottom:8px">📅</div>
+          <div>暂无数据，点击"录入每日数据"或"批量导入"</div>
+        </div>`
+      : `<div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>访客量</th><th>支付人数</th><th>支付件数</th><th>支付金额</th><th>转化率</th><th>客均价</th><th>操作</th></tr></thead>
+          <tbody>
+            ${rows.map(r => {
+              const conv = r.visitors > 0 ? (r.buyers/r.visitors*100).toFixed(2)+'%' : '-';
+              const avgP = r.buyers > 0 ? currSymbol+(r.amount/r.buyers).toFixed(2) : '-';
+              return `<tr>
+                <td style="white-space:nowrap;font-weight:600">${r.date}</td>
+                <td>${fmt(r.visitors||0)}</td>
+                <td>${fmt(r.buyers||0)}</td>
+                <td>${fmt(r.qty||0)}</td>
+                <td style="color:#f59e0b;font-weight:700">${currSymbol}${(r.amount||0).toFixed(2)}</td>
+                <td>${conv}</td>
+                <td>${avgP}</td>
+                <td>
+                  <button style="font-size:11px;color:#94a3b8;background:transparent;border:none;cursor:pointer" onclick="openEditCBDailyModal('${shopId}','${r.id}')">编辑</button>
+                  <button style="font-size:11px;color:#f87171;background:transparent;border:none;cursor:pointer" onclick="removeCBDaily('${shopId}','${r.id}')">删</button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`}
+  </div>
+
+  <!-- 录入每日数据弹窗 -->
+  <div id="modal-cb-daily" class="modal" style="display:none">
+    <div class="modal-content" style="max-width:440px">
+      <div class="modal-header">
+        <h3 id="cb-daily-modal-title">录入每日数据</h3>
+        <button onclick="closeModal('modal-cb-daily')" class="close-btn">✕</button>
+      </div>
+      <div style="padding:16px;display:grid;gap:12px">
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">日期 *</label>
+          <input type="date" id="cb-daily-date" class="input-field"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">访客量</label>
+          <input type="number" id="cb-daily-visitors" class="input-field" placeholder="0"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">支付人数</label>
+          <input type="number" id="cb-daily-buyers" class="input-field" placeholder="0"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">支付件数</label>
+          <input type="number" id="cb-daily-qty" class="input-field" placeholder="0"></div>
+        <div><label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">支付金额（${currSymbol}）</label>
+          <input type="number" id="cb-daily-amount" class="input-field" placeholder="0.00" step="0.01"></div>
+        <input type="hidden" id="cb-daily-edit-id">
+        <div style="display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn-secondary" onclick="closeModal('modal-cb-daily')">取消</button>
+          <button class="btn-primary" onclick="saveCBDaily('${shopId}')">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量导入弹窗 -->
+  <div id="modal-cb-import" class="modal" style="display:none">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <h3>批量导入每日数据</h3>
+        <button onclick="closeModal('modal-cb-import')" class="close-btn">✕</button>
+      </div>
+      <div style="padding:16px">
+        <div style="background:#1e293b;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#64748b;line-height:1.8">
+          <div style="color:#a78bfa;font-weight:600;margin-bottom:6px">📋 格式说明</div>
+          每行一条记录，格式：<span style="color:#34d399;font-family:monospace">日期, 访客量, 支付人数, 支付件数, 支付金额</span><br>
+          示例：<span style="color:#fbbf24;font-family:monospace">2026-03-01, 1200, 85, 120, 1580.50</span><br>
+          也可直接粘贴 CSV 或 Excel 复制的内容，自动识别日期列
+        </div>
+        <textarea id="cb-import-text" style="width:100%;height:180px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;padding:10px;font-family:monospace;font-size:12px;resize:vertical" placeholder="粘贴数据..."></textarea>
+        <div id="cb-import-preview" style="margin-top:10px;font-size:12px;color:#64748b"></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
+          <button class="btn-secondary" onclick="closeModal('modal-cb-import')">取消</button>
+          <button class="btn-primary" onclick="importCBDaily('${shopId}')">导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+function setCBFilter(shopId, month) {
+  window._cbFilterMonth = month;
+  const domesticEl = document.getElementById('domestic-detail-area');
+  if (domesticEl) {
+    const shop = DB.getShops().find(s => s.id === shopId);
+    if (shop) domesticEl.innerHTML = renderCrossBorderDetail(shop);
+  }
+}
+
+function openAddCBDailyModal(shopId) {
+  document.getElementById('cb-daily-modal-title').textContent = '录入每日数据';
+  document.getElementById('cb-daily-date').value = new Date().toISOString().slice(0,10);
+  ['visitors','buyers','qty','amount'].forEach(k => { const el = document.getElementById('cb-daily-'+k); if(el) el.value = ''; });
+  document.getElementById('cb-daily-edit-id').value = '';
+  document.getElementById('modal-cb-daily').style.display = 'flex';
+}
+function openEditCBDailyModal(shopId, rowId) {
+  const r = CrossBorderDailyDB.getAll(shopId).find(x => x.id === rowId);
+  if (!r) return;
+  document.getElementById('cb-daily-modal-title').textContent = '编辑每日数据';
+  document.getElementById('cb-daily-date').value = r.date || '';
+  document.getElementById('cb-daily-visitors').value = r.visitors || '';
+  document.getElementById('cb-daily-buyers').value = r.buyers || '';
+  document.getElementById('cb-daily-qty').value = r.qty || '';
+  document.getElementById('cb-daily-amount').value = r.amount || '';
+  document.getElementById('cb-daily-edit-id').value = rowId;
+  document.getElementById('modal-cb-daily').style.display = 'flex';
+}
+function saveCBDaily(shopId) {
+  const date = document.getElementById('cb-daily-date').value;
+  if (!date) { showToast('请选择日期','error'); return; }
+  const editId = document.getElementById('cb-daily-edit-id').value;
+  const row = {
+    id: editId || ('cbd_'+Date.now()),
+    date,
+    visitors: parseFloat(document.getElementById('cb-daily-visitors').value) || 0,
+    buyers: parseFloat(document.getElementById('cb-daily-buyers').value) || 0,
+    qty: parseFloat(document.getElementById('cb-daily-qty').value) || 0,
+    amount: parseFloat(document.getElementById('cb-daily-amount').value) || 0,
+  };
+  CrossBorderDailyDB.upsert(shopId, row);
+  closeModal('modal-cb-daily');
+  setCBFilter(shopId, window._cbFilterMonth);
+  showToast('已保存','success');
+}
+function removeCBDaily(shopId, rowId) {
+  if (!confirm('确定删除这条数据？')) return;
+  CrossBorderDailyDB.remove(shopId, rowId);
+  setCBFilter(shopId, window._cbFilterMonth);
+  showToast('已删除','info');
+}
+function openImportCBModal(shopId) {
+  document.getElementById('cb-import-text').value = '';
+  document.getElementById('cb-import-preview').textContent = '';
+  document.getElementById('modal-cb-import').style.display = 'flex';
+}
+function importCBDaily(shopId) {
+  const text = document.getElementById('cb-import-text').value.trim();
+  if (!text) { showToast('请粘贴数据','error'); return; }
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  let count = 0, errors = 0;
+  lines.forEach(line => {
+    // 支持逗号、制表符分隔
+    const parts = line.split(/[\t,，]+/).map(s => s.trim().replace(/^["']|["']$/g,''));
+    if (parts.length < 2) return;
+    // 找日期列（含-或/）
+    const dateStr = parts.find(p => /^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/.test(p));
+    if (!dateStr) { errors++; return; }
+    const normalized = dateStr.replace(/\//g,'-').replace(/(\d{4})-(\d{1})-/,'$1-0$2-').replace(/-(\d{1})$/,'-0$1');
+    const rest = parts.filter(p => p !== dateStr);
+    const nums = rest.map(v => parseFloat(v.replace(/[^\d.]/g,'')) || 0);
+    const row = {
+      id: 'cbd_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      date: normalized,
+      visitors: nums[0] || 0,
+      buyers: nums[1] || 0,
+      qty: nums[2] || 0,
+      amount: nums[3] || 0,
+    };
+    CrossBorderDailyDB.upsert(shopId, row);
+    count++;
+  });
+  closeModal('modal-cb-import');
+  setCBFilter(shopId, window._cbFilterMonth);
+  showToast(`✅ 导入 ${count} 条${errors>0?'，'+errors+'条格式错误':''}`, count>0?'success':'error');
+}
+function exportCBDaily(shopId) {
+  const rows = CrossBorderDailyDB.getAll(shopId);
+  if (!rows.length) return;
+  const headers = ['日期','访客量','支付人数','支付件数','支付金额','转化率','客均价'];
+  const data = rows.map(r => {
+    const conv = r.visitors>0?(r.buyers/r.visitors*100).toFixed(2)+'%':'-';
+    const avg = r.buyers>0?(r.amount/r.buyers).toFixed(2):'-';
+    return [r.date, r.visitors||0, r.buyers||0, r.qty||0, r.amount||0, conv, avg];
+  });
+  const csv = [headers,...data].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`跨境每日_${shopId}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
 // ============================================
@@ -2063,11 +2858,12 @@ async function loadAdminUsers() {
 
         ${!isAdmin ? `
         <div>
+          <!-- 页面访问权限 -->
           <div style="font-size:12px;color:#64748b;margin-bottom:8px;display:flex;align-items:center;gap:6px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             页面访问权限：
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
             ${ALL_PAGES.map(page => {
               const hasPerm = effectivePerms.includes(page);
               return `<label class="perm-toggle" title="${hasPerm ? '点击收回'+PAGE_NAMES[page]+'权限' : '点击开放'+PAGE_NAMES[page]+'权限'}">
@@ -2076,6 +2872,25 @@ async function loadAdminUsers() {
               </label>`;
             }).join('')}
           </div>
+          <!-- 细粒度操作权限 -->
+          <div style="font-size:12px;color:#64748b;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 1 21 12a10 10 0 0 1-2.93 7.07A10 10 0 0 1 12 21a10 10 0 0 1-7.07-2.93A10 10 0 0 1 3 12a10 10 0 0 1 2.93-7.07A10 10 0 0 1 12 3a10 10 0 0 1 7.07 2.93z"/></svg>
+            细粒度操作权限：
+          </div>
+          ${Object.entries(ACTION_GROUPS).map(([group, actions]) => `
+            <div style="margin-bottom:10px">
+              <div style="font-size:11px;color:#475569;margin-bottom:5px;padding-left:2px">${group}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:7px">
+                ${actions.map(action => {
+                  const hasPerm = effectivePerms.includes(action);
+                  return `<label class="perm-toggle" title="${ACTION_NAMES[action]}">
+                    <input type="checkbox" ${hasPerm ? 'checked' : ''} onchange="handlePermChange('${u.id}','${action}',this)">
+                    <span class="perm-label ${hasPerm ? 'perm-on' : 'perm-off'}" style="font-size:11px">${ACTION_NAMES[action]}</span>
+                  </label>`;
+                }).join('')}
+              </div>
+            </div>
+          `).join('')}
           <div style="margin-top:10px;display:flex;gap:8px">
             <button class="btn-secondary btn-sm" onclick="grantAllPerms('${u.id}')">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-1px"><polyline points="20 6 9 17 4 12"/></svg>
