@@ -57,6 +57,20 @@ const DB = {
     Cache.set('shops', shops);
     if (SUPABASE_ENABLED) _pushShops(shops);
   },
+  // 新增单个店铺（直接 upsert，比全量更新更可靠）
+  addShop(shop) {
+    const shops = this.getShops();
+    shops.push(shop);
+    Cache.set('shops', shops);
+    if (SUPABASE_ENABLED) _pushSingleShop(shop);
+  },
+  // 删除店铺（同时删云端）
+  removeShop(shopId) {
+    const shops = this.getShops().filter(s => s.id !== shopId);
+    Cache.set('shops', shops);
+    if (SUPABASE_ENABLED) _deleteShopFromCloud(shopId);
+    return shops;
+  },
   setSalesData(sales) {
     Cache.set('sales', sales);
     if (SUPABASE_ENABLED) _pushSales(sales);
@@ -74,18 +88,58 @@ const DB = {
 // ============ Supabase 推送函数 ============
 async function _pushShops(shops) {
   try {
-    // 先清空再写入（简单粗暴，数据量小）
-    await sbFetch('shops', 'DELETE', null, { 'Prefer': 'return=minimal' });
-    if (shops.length > 0) await sbFetch('shops', 'POST', shops);
+    if (!shops || shops.length === 0) return;
+    // upsert（有则更新，无则插入），确保 status 字段存在
+    const normalized = shops.map(s => ({
+      id: s.id,
+      name: s.name,
+      platform: s.platform || 'SHEIN',
+      region: s.region || null,
+      color: s.color || '#6366f1',
+      status: s.status || 'active',
+    }));
+    await sbFetch('shops', 'POST', normalized, { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
   } catch(e) { console.warn('[Supabase] 店铺同步失败:', e.message); }
+}
+
+async function _pushSingleShop(shop) {
+  try {
+    const normalized = {
+      id: shop.id,
+      name: shop.name,
+      platform: shop.platform || 'SHEIN',
+      region: shop.region || null,
+      color: shop.color || '#6366f1',
+      status: shop.status || 'active',
+    };
+    await sbFetch('shops', 'POST', normalized, { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+  } catch(e) { console.warn('[Supabase] 单店铺同步失败:', e.message); }
+}
+
+async function _deleteShopFromCloud(shopId) {
+  try {
+    await sbFetch('shops?id=eq.' + encodeURIComponent(shopId), 'DELETE');
+  } catch(e) { console.warn('[Supabase] 删除店铺失败:', e.message); }
 }
 
 async function _pushSales(sales) {
   try {
-    // 批量 upsert（按 date+shopId+styleId 作为唯一键）
+    if (!sales || sales.length === 0) return;
+    // 确保字段名与数据库列名匹配（camelCase -> snake_case）
+    const normalized = sales.map(s => ({
+      shop_id: s.shopId || s.shop_id,
+      date: s.date,
+      style_id: s.styleId || s.style_id || null,
+      style_name: s.styleName || s.style_name || null,
+      revenue: s.revenue || 0,
+      orders: s.orders || 0,
+      refund_orders: s.refundOrders || s.refund_orders || 0,
+      price: s.price || 0,
+    }));
+    // 批量 upsert（按 date+shop_id+style_id 作为唯一键）
     const BATCH = 500;
-    for (let i = 0; i < sales.length; i += BATCH) {
-      const chunk = sales.slice(i, i + BATCH);
+    for (let i = 0; i < normalized.length; i += BATCH) {
+      const chunk = normalized.slice(i, i + BATCH);
       await sbFetch('sales', 'POST', chunk, { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
     }
   } catch(e) { console.warn('[Supabase] 销售数据同步失败:', e.message); }
@@ -111,7 +165,23 @@ async function syncFromSupabase() {
     while (true) {
       const chunk = await sbFetch(`sales?select=*&order=date.desc&limit=${PAGE}&offset=${offset}`);
       if (!chunk || chunk.length === 0) break;
-      allSales.push(...chunk);
+      // 将 snake_case 字段转回 camelCase（兼容本地代码）
+      const mapped = chunk.map(s => ({
+        id: s.id,
+        shopId: s.shop_id,
+        shop_id: s.shop_id,
+        date: s.date,
+        styleId: s.style_id,
+        style_id: s.style_id,
+        styleName: s.style_name,
+        style_name: s.style_name,
+        revenue: s.revenue,
+        orders: s.orders,
+        refundOrders: s.refund_orders,
+        refund_orders: s.refund_orders,
+        price: s.price,
+      }));
+      allSales.push(...mapped);
       if (chunk.length < PAGE) break;
       offset += PAGE;
     }

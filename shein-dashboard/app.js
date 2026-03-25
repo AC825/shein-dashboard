@@ -409,12 +409,12 @@ function addShop() {
     name,
     platform: document.getElementById('new-shop-platform').value,
     color,
+    status: 'active',
   };
-  shops.push(newShop);
-  DB.setShops(shops);
+  DB.addShop(newShop);  // 使用新方法，直接单条 upsert 到云端
   renderShopNav();
   closeModal('modal-add-shop');
-  showToast(`🏪 店铺 "${name}" 添加成功`, 'success');
+  showToast(`🏪 店铺 "${name}" 添加成功，云端已同步`, 'success');
   document.getElementById('new-shop-name').value = '';
   if (currentPage === 'shops') renderShops();
 }
@@ -422,13 +422,12 @@ function addShop() {
 // ============ 删除店铺 ============
 function deleteShop(shopId) {
   if (!confirm('确定要删除该店铺及其所有数据吗？此操作不可恢复。')) return;
-  let shops = DB.getShops().filter(s => s.id !== shopId);
-  DB.setShops(shops);
+  DB.removeShop(shopId);  // 使用新方法，同时删云端
   let sales = DB.getSalesData().filter(d => d.shopId !== shopId);
   DB.setSalesData(sales);
   renderShopNav();
   renderShops();
-  showToast('🗑️ 店铺已删除', 'info');
+  showToast('🗑️ 店铺已删除，云端已同步', 'info');
 }
 
 // ============================================
