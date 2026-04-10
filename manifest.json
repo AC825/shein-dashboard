@@ -1,0 +1,85 @@
+﻿{
+  "name": "电商数据平台",
+  "short_name": "电商平台",
+  "description": "多平台电商数据管理与分析工具，支持国内/跨境店铺数据统一管理",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "数据看板",
+      "short_name": "看板",
+      "url": "/?page=dashboard",
+      "description": "查看跨境/国内数据看板"
+    },
+    {
+      "name": "店铺管理",
+      "short_name": "店铺",
+      "url": "/?page=shops",
+      "description": "管理所有店铺"
+    },
+    {
+      "name": "成本管理",
+      "short_name": "成本",
+      "url": "/?page=cost-cross",
+      "description": "查看跨境成本汇总"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "screenshots": []
+}
+

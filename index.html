@@ -1,0 +1,672 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>电商数据平台</title>
+<!-- 禁止缓存 HTML -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+<!-- PWA 支持 -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#6366f1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="电商平台">
+<!-- iOS 图标 -->
+<link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png">
+<!-- favicon -->
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<!-- CDN 库：defer 延迟加载，不阻塞首屏渲染 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="xlsx.full.min.js" defer></script>
+<link rel="stylesheet" href="style.css?v=20260331c">
+</head>
+<body>
+
+<!-- 粒子背景 -->
+<canvas id="particle-canvas" style="position:fixed;top:0;left:0;pointer-events:none;z-index:0;opacity:0.25"></canvas>
+
+<!-- ==================== 登录/注册页面 ==================== -->
+<div id="auth-page" style="display:none">
+  <div class="auth-bg">
+    <div class="auth-container">
+      <!-- Logo区域 -->
+      <div class="auth-logo">
+        <div class="auth-logo-icon">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+            <path d="M18 2L4 10V26L18 34L32 26V10L18 2Z" stroke="url(#lg1)" stroke-width="1.5" fill="rgba(124,58,237,0.15)"/>
+            <path d="M18 8L10 13V23L18 28L26 23V13L18 8Z" fill="url(#lg2)" opacity="0.8"/>
+            <circle cx="18" cy="18" r="3" fill="#fff" opacity="0.9"/>
+            <defs>
+              <linearGradient id="lg1" x1="4" y1="2" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/>
+              </linearGradient>
+              <linearGradient id="lg2" x1="10" y1="8" x2="26" y2="28" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <div class="auth-logo-text">电商数据平台</div>
+          <div class="auth-logo-sub">CROSS-BORDER ANALYTICS PLATFORM</div>
+        </div>
+      </div>
+
+      <!-- 登录/注册 Tab -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">登录</button>
+        <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">注册</button>
+      </div>
+
+      <!-- 登录表单 -->
+      <div id="form-login">
+        <div class="auth-form-group">
+          <label class="auth-label">账号 / 手机号</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input type="text" id="login-phone" class="auth-input" placeholder="输入账号或手机号" maxlength="20" autocomplete="username">
+          </div>
+        </div>
+        <div class="auth-form-group">
+          <label class="auth-label">密码</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input type="password" id="login-pass" class="auth-input" placeholder="请输入密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+            <button class="auth-eye" onclick="togglePwd('login-pass',this)" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="login-error" class="auth-error" style="display:none"></div>
+        <button class="auth-btn" onclick="doLogin()" id="btn-login" type="button">
+          <span id="login-btn-text">登 录</span>
+        </button>
+        <div class="auth-footer-tip">
+          还没有账号？<a onclick="switchAuthTab('register')">立即注册</a>
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          <a onclick="showForgotForm()" style="color:#a78bfa">忘记密码？</a>
+        </div>
+      </div>
+
+      <!-- 忘记密码表单 -->
+      <div id="form-forgot" style="display:none">
+        <div style="text-align:center;margin-bottom:16px;color:#a78bfa;font-size:15px;font-weight:600;">重置密码申请</div>
+        <div class="auth-form-group">
+          <label class="auth-label">手机号</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/>
+            </svg>
+            <input type="tel" id="forgot-phone" class="auth-input" placeholder="请输入注册时的手机号" maxlength="11">
+          </div>
+        </div>
+        <div class="auth-form-group">
+          <label class="auth-label">新密码</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input type="password" id="forgot-newpass" class="auth-input" placeholder="设置新密码（至少6位）">
+            <button class="auth-eye" onclick="togglePwd('forgot-newpass',this)" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="auth-form-group">
+          <label class="auth-label">确认新密码</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input type="password" id="forgot-newpass2" class="auth-input" placeholder="再次输入新密码" onkeydown="if(event.key==='Enter')doSubmitResetRequest()">
+          </div>
+        </div>
+        <div id="forgot-error" class="auth-error" style="display:none"></div>
+        <div id="forgot-success" style="display:none;background:rgba(16,185,129,0.12);border:1px solid #10b981;color:#10b981;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;text-align:center;"></div>
+        <button class="auth-btn" onclick="doSubmitResetRequest()" id="btn-forgot" type="button">
+          <span id="forgot-btn-text">提交申请</span>
+        </button>
+        <div class="auth-footer-tip"><a onclick="showForgotForm(false)">返回登录</a></div>
+      </div>
+
+      <!-- 注册表单 -->
+      <div id="form-register" style="display:none">
+        <div class="auth-form-group">
+          <label class="auth-label">手机号</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/>
+            </svg>
+            <input type="tel" id="reg-phone" class="auth-input" placeholder="请输入手机号" maxlength="11">
+          </div>
+        </div>
+        <div class="auth-form-group">
+          <label class="auth-label">昵称（可选）</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input type="text" id="reg-nickname" class="auth-input" placeholder="您的昵称">
+          </div>
+        </div>
+        <div class="auth-form-group">
+          <label class="auth-label">设置密码</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input type="password" id="reg-pass" class="auth-input" placeholder="至少6位密码">
+            <button class="auth-eye" onclick="togglePwd('reg-pass',this)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="auth-form-group">
+          <label class="auth-label">确认密码</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input type="password" id="reg-pass2" class="auth-input" placeholder="再次输入密码" onkeydown="if(event.key==='Enter')doRegister()">
+          </div>
+        </div>
+        <div id="reg-error" class="auth-error" style="display:none"></div>
+        <button class="auth-btn" onclick="doRegister()" id="btn-register">
+          <span id="reg-btn-text">注 册</span>
+        </button>
+        <div class="auth-footer-tip">已有账号？<a onclick="switchAuthTab('login')">直接登录</a></div>
+      </div>
+
+    </div>
+    <!-- 装饰线条 -->
+    <div class="auth-deco auth-deco-1"></div>
+    <div class="auth-deco auth-deco-2"></div>
+  </div>
+</div>
+
+<!-- ==================== 主应用 ==================== -->
+<div id="app" style="display:none">
+  <!-- 顶部进度条 -->
+  <div id="nprogress-bar"><div id="nprogress-fill"></div></div>
+
+  <!-- 侧边栏 -->
+  <aside id="sidebar">
+    <div class="logo">
+      <div class="logo-icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 36 36" fill="none">
+          <path d="M18 2L4 10V26L18 34L32 26V10L18 2Z" stroke="url(#sl1)" stroke-width="1.5" fill="rgba(124,58,237,0.2)"/>
+          <path d="M18 9L11 13.5V22.5L18 27L25 22.5V13.5L18 9Z" fill="url(#sl2)"/>
+          <circle cx="18" cy="18" r="2.5" fill="white" opacity="0.9"/>
+          <defs>
+            <linearGradient id="sl1" x1="4" y1="2" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/>
+            </linearGradient>
+            <linearGradient id="sl2" x1="11" y1="9" x2="25" y2="27" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-text">电商数据平台</div>
+        <div class="logo-sub">CROSS-BORDER ANALYTICS</div>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-group">
+        <div class="nav-label">核心功能</div>
+        <a class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+          </span><span>数据看板</span>
+          <span class="nav-badge" id="nb-dashboard"></span>
+        </a>
+        <a class="nav-item" data-page="styles" onclick="navigate('styles')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </span><span>款式分析</span>
+        </a>
+        <a class="nav-item" data-page="revenue" onclick="navigate('revenue')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </span><span>营业额统计</span>
+        </a>
+        <a class="nav-item" data-page="profit" onclick="navigate('profit')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+          </span><span>利润计算</span>
+        </a>
+        <a class="nav-item" data-page="alert" onclick="navigate('alert')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </span><span>预警中心</span>
+          <span class="nav-badge show" id="nb-alert">3</span>
+        </a>
+        <a class="nav-item" data-page="academy" onclick="navigate('academy')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+          </span><span>知识学院</span>
+        </a>
+        <a class="nav-item" data-page="square" onclick="navigate('square')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </span><span>知识广场</span>
+        </a>
+      </div>
+      <!-- 成本管理 -->
+      <div class="nav-group">
+        <div class="nav-label">成本管理</div>
+        <a class="nav-item" data-page="cost-cross" onclick="navigate('cost-cross')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+          </span><span>跨境产品成本</span>
+        </a>
+        <a class="nav-item" data-page="cost-domestic" onclick="navigate('cost-domestic')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </span><span>国内产品成本</span>
+        </a>
+      </div>
+      <div class="nav-group" id="nav-shops-group">
+        <div class="nav-label" onclick="toggleShopNav()" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;">
+          <span>
+            店铺管理
+            <span id="shop-count-badge" class="nav-count">0</span>
+          </span>
+          <svg id="shop-nav-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform .25s;flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="shop-nav-collapse">
+        <a class="nav-item" data-page="shops" onclick="navigate('shops')">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </span><span>店铺管理</span>
+        </a>
+        <div id="shop-list-nav"></div>
+        <a class="nav-item add-shop" onclick="openAddShop()">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+          </span><span>添加店铺</span>
+        </a>
+        </div><!-- end shop-nav-collapse -->
+      </div>
+    </nav>
+
+    <!-- 侧边栏底部 -->
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="sidebar-user" onclick="navigate('profile')">
+        <div class="sidebar-user-avatar" id="user-avatar">U</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="user-name">用户</div>
+          <div class="sidebar-user-role" id="user-role">成员</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="sidebar-footer-info">
+        <span id="total-data-count">-- 条数据</span>
+        <span class="dot-sep">·</span>
+        <span id="shop-total-count">-- 家店铺</span>
+      </div>
+      <a class="sidebar-logout" onclick="doLogout()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        退出登录
+      </a>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main id="main">
+    <!-- 顶部导航栏 -->
+    <div id="topbar">
+      <div id="breadcrumb"></div>
+      <div class="topbar-right">
+        <span id="sync-status" style="font-size:12px;color:#94a3b8;margin-right:8px" class="topbar-hide-mobile"></span>
+        <span id="exchange-rate-display" style="font-size:11px;color:#f59e0b;cursor:help;background:rgba(245,158,11,0.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(245,158,11,0.2)" title="实时汇率">1 USD = ¥7.20</span>
+        <span id="topbar-date" class="topbar-date"></span>
+        <button class="topbar-bigscreen" onclick="toggleBigScreen()" id="bigscreen-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          大屏
+        </button>
+        <!-- PWA 安装按钮：仅在可安装时由 JS 显示 -->
+        <button id="pwa-install-btn" class="topbar-btn" title="安装到手机桌面" style="display:none;align-items:center;gap:4px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          安装APP
+        </button>
+        <button class="topbar-btn topbar-hide-mobile" onclick="manualSync()" title="从云端同步最新数据">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.44"/></svg>
+        </button>
+        <button class="topbar-btn topbar-hide-mobile" onclick="refreshCurrentPage()" title="刷新页面">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <!-- 权限管理（仅管理员可见） -->
+        <button class="topbar-btn admin-only" id="btn-admin" onclick="navigate('admin')" title="权限管理" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </button>
+        <!-- 手机端用户头像快捷入口（桌面端隐藏，手机端显示） -->
+        <div id="topbar-user-mini" style="display:none" onclick="showMobileMenu()">
+          <div class="sidebar-user-avatar" id="topbar-avatar" style="width:28px;height:28px;font-size:12px;cursor:pointer">U</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页面容器 -->
+    <div id="page-container">
+      <div id="page-dashboard" class="page active"></div>
+      <div id="page-styles" class="page"></div>
+      <div id="page-revenue" class="page"></div>
+      <div id="page-profit" class="page"></div>
+      <div id="page-alert" class="page"></div>
+      <div id="page-import" class="page"></div>
+      <div id="page-shops" class="page"></div>
+      <div id="page-shop-detail" class="page"></div>
+      <div id="page-academy" class="page"></div>
+      <div id="page-square" class="page"></div>
+      <div id="page-admin" class="page"></div>
+      <div id="page-profile" class="page"></div>
+      <div id="page-cost-cross" class="page"></div>
+      <div id="page-cost-domestic" class="page"></div>
+    </div>
+  </main>
+</div>
+
+<!-- 添加店铺弹窗 -->
+<div id="modal-add-shop" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        添加新店铺
+      </h3>
+      <button class="modal-close" onclick="closeModal('modal-add-shop')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label>店铺名称 <span style="color:#f87171">*</span></label>
+      <input type="text" id="new-shop-name" placeholder="例如：SHEIN官方店1号">
+    </div>
+    <div class="form-group">
+      <label>店铺ID（可选）</label>
+      <input type="text" id="new-shop-id" placeholder="例如：shop_001">
+    </div>
+    <div class="form-group">
+      <label>所属平台</label>
+      <select id="new-shop-platform">
+        <optgroup label="🇨🇳 国内平台（人民币 ¥）">
+          <option value="淘宝">淘宝</option>
+          <option value="天猫">天猫</option>
+          <option value="京东">京东</option>
+          <option value="拼多多">拼多多</option>
+          <option value="抖音小店">抖音小店</option>
+          <option value="快手小店">快手小店</option>
+          <option value="小红书">小红书</option>
+          <option value="唯品会">唯品会</option>
+        </optgroup>
+        <optgroup label="🌍 跨境平台（美元 $）">
+          <option value="SHEIN" selected>SHEIN</option>
+          <option value="Amazon">Amazon</option>
+          <option value="Temu">Temu</option>
+          <option value="TikTok Shop">TikTok Shop</option>
+          <option value="Shopee">Shopee</option>
+          <option value="Lazada">Lazada</option>
+          <option value="AliExpress">AliExpress</option>
+          <option value="Wish">Wish</option>
+          <option value="eBay">eBay</option>
+          <option value="Etsy">Etsy</option>
+          <option value="独立站">独立站</option>
+        </optgroup>
+        <optgroup label="其他">
+          <option value="其他国内">其他国内平台</option>
+          <option value="其他跨境">其他跨境平台</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>月营收目标（可选）</label>
+      <input type="number" id="new-shop-target" placeholder="例如：50000">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-add-shop')">取消</button>
+      <button class="btn-primary" onclick="addShop()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 知识学院 - 新增文章弹窗 -->
+<div id="modal-add-article" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:640px;width:95%">
+    <div class="modal-header">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        分享知识
+      </h3>
+      <button class="modal-close" onclick="closeModal('modal-add-article')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label>发布身份 <span style="color:#f87171">*</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="article-role" style="flex:1;min-width:160px">
+          <option value="">-- 选择或新建角色 --</option>
+        </select>
+        <button class="btn-secondary btn-sm" onclick="openCreateRoleModal()" style="white-space:nowrap">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-1px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建角色
+        </button>
+      </div>
+      <div style="font-size:11px;color:#475569;margin-top:4px">以角色身份发布，内容归属该角色下</div>
+    </div>
+    <div class="form-group">
+      <label>文章标题 <span style="color:#f87171">*</span></label>
+      <input type="text" id="article-title" placeholder="例如：SHEIN爆款选品技巧分享">
+    </div>
+    <div class="form-group">
+      <label>分类</label>
+      <select id="article-category">
+        <option>运营经验</option><option>选品技巧</option><option>物流仓储</option><option>广告投放</option><option>数据分析</option><option>其他</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>内容 <span style="color:#f87171">*</span></label>
+      <textarea id="article-content" rows="6" placeholder="分享你的经验、技巧或心得..." style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;line-height:1.6;outline:none"></textarea>
+    </div>
+    <div class="form-group">
+      <label>附件上传（可选）</label>
+      <div id="article-file-drop" onclick="document.getElementById('article-files').click()"
+        style="border:2px dashed #334155;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;"
+        ondragover="event.preventDefault();this.style.borderColor='#7c3aed'"
+        ondragleave="this.style.borderColor='#334155'"
+        ondrop="handleArticleFileDrop(event)">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5" style="margin-bottom:8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div style="color:#64748b;font-size:13px">点击或拖拽上传文件</div>
+        <div style="color:#475569;font-size:11px;margin-top:4px">支持图片、PDF、Excel、Word、截图等，单文件≤10MB</div>
+      </div>
+      <input type="file" id="article-files" multiple accept="image/*,.pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx,.txt,.csv,.zip" style="display:none" onchange="handleArticleFileSelect(this)">
+      <div id="article-file-list" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-add-article')">取消</button>
+      <button class="btn-primary" onclick="submitArticle()">发布分享</button>
+    </div>
+  </div>
+</div>
+
+<!-- 知识学院 - 新建角色弹窗 -->
+<div id="modal-create-role" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:420px;width:95%">
+    <div class="modal-header">
+      <h3>新建角色身份</h3>
+      <button class="modal-close" onclick="closeModal('modal-create-role')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label>角色名称 <span style="color:#f87171">*</span></label>
+      <input type="text" id="new-role-name" placeholder="例如：运营总监、选品专员、仓储主管">
+    </div>
+    <div class="form-group">
+      <label>角色描述（可选）</label>
+      <input type="text" id="new-role-desc" placeholder="简单描述这个角色的职责">
+    </div>
+    <div class="form-group">
+      <label>角色头像颜色</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="role-color-picker">
+        <div class="role-color-opt" onclick="selectRoleColor(this,'#7c3aed')" style="width:28px;height:28px;border-radius:50%;background:#7c3aed;cursor:pointer;border:3px solid #7c3aed;outline:2px solid white"></div>
+        <div class="role-color-opt" onclick="selectRoleColor(this,'#06b6d4')" style="width:28px;height:28px;border-radius:50%;background:#06b6d4;cursor:pointer;border:3px solid transparent"></div>
+        <div class="role-color-opt" onclick="selectRoleColor(this,'#10b981')" style="width:28px;height:28px;border-radius:50%;background:#10b981;cursor:pointer;border:3px solid transparent"></div>
+        <div class="role-color-opt" onclick="selectRoleColor(this,'#f59e0b')" style="width:28px;height:28px;border-radius:50%;background:#f59e0b;cursor:pointer;border:3px solid transparent"></div>
+        <div class="role-color-opt" onclick="selectRoleColor(this,'#f87171')" style="width:28px;height:28px;border-radius:50%;background:#f87171;cursor:pointer;border:3px solid transparent"></div>
+        <div class="role-color-opt" onclick="selectRoleColor(this,'#6366f1')" style="width:28px;height:28px;border-radius:50%;background:#6366f1;cursor:pointer;border:3px solid transparent"></div>
+      </div>
+      <input type="hidden" id="new-role-color" value="#7c3aed">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-create-role')">取消</button>
+      <button class="btn-primary" onclick="submitCreateRole()">创建角色</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast 通知 -->
+<div id="toast" class="toast">
+  <span id="toast-icon"></span>
+  <span id="toast-text"></span>
+</div>
+
+<script src="data-v3.js?v=20260410" defer></script>
+<script src="app-v3.js?v=20260410" defer></script>
+<script src="auth.js?v=20260327u" defer></script>
+
+<!-- PWA Service Worker 注册 -->
+<script>
+// === PWA Service Worker 管理 ===
+// 版本标记：当此版本号变化时，强制清理旧 SW 并重新注册
+const SW_VERSION = '20260410b';
+
+(function() {
+  if (!('serviceWorker' in navigator)) return;
+
+  // 读取上次记录的 SW 版本
+  const lastSWVer = localStorage.getItem('ec_sw_version') || '';
+
+  function doRegister() {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(function(reg) {
+        console.log('[PWA] Service Worker 注册成功:', reg.scope);
+        localStorage.setItem('ec_sw_version', SW_VERSION);
+        // 有新版本时自动刷新
+        reg.onupdatefound = function() {
+          const newWorker = reg.installing;
+          newWorker.onstatechange = function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[PWA] 新版本已就绪，发送更新信号');
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          };
+        };
+      })
+      .catch(function(err) {
+        console.warn('[PWA] Service Worker 注册失败:', err);
+      });
+  }
+
+  // 版本变化时：先注销旧 SW，清全部缓存，再重新注册
+  if (lastSWVer !== SW_VERSION) {
+    console.log('[PWA] 检测到版本更新: ' + lastSWVer + ' -> ' + SW_VERSION + '，清理旧缓存...');
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      Promise.all(regs.map(function(r) { return r.unregister(); }))
+        .then(function() {
+          // 注销后清掉全部旧缓存
+          return caches.keys().then(function(names) {
+            return Promise.all(names.map(function(n) { return caches.delete(n); }));
+          });
+        })
+        .then(function() {
+          console.log('[PWA] 旧缓存已清理，重新注册...');
+          doRegister();
+          // 延迟刷新确保新资源加载
+          setTimeout(function() { window.location.reload(); }, 500);
+        })
+        .catch(function(err) {
+          console.warn('[PWA] 清理失败:', err);
+          doRegister();
+        });
+    });
+  } else {
+    doRegister();
+  }
+
+  // 检测到控制器更换时刷新页面（让新 SW 生效）
+  navigator.serviceWorker.addEventListener('controllerchange', function() {
+    console.log('[PWA] 新版本已激活，自动刷新');
+    window.location.reload();
+  });
+})();
+
+// PWA 安装提示（安卓端弹出"添加到主屏幕"横幅）
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  // 显示自定义安装按钮（如果存在）
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    installBtn.style.display = 'flex';
+    installBtn.onclick = function() {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(result) {
+        console.log('[PWA] 用户选择:', result.outcome);
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+      });
+    };
+  }
+});
+
+// 已安装后隐藏安装按钮
+window.addEventListener('appinstalled', function() {
+  console.log('[PWA] 已成功安装到主屏幕！');
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) installBtn.style.display = 'none';
+  deferredPrompt = null;
+});
+</script>
+</body>
+</html>
+

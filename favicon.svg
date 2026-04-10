@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#312e81;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="icon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="icon2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- 圆角背景 -->
+  <rect width="32" height="32" rx="7.04" ry="7.04" fill="url(#bg)"/>
+  <!-- 装饰圆 -->
+  <circle cx="27.2" cy="4.8" r="5.76" fill="#6366f1" opacity="0.2"/>
+  <circle cx="4.8" cy="27.2" r="3.84" fill="#34d399" opacity="0.15"/>
+  <!-- 主图标：折线图 -->
+  <g transform="translate(4, 4)">
+    <!-- 坐标轴 -->
+    <line x1="2.4000000000000004" y1="20.4" x2="22.799999999999997" y2="20.4" stroke="#6366f1" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+    <line x1="2.4000000000000004" y1="3.5999999999999996" x2="2.4000000000000004" y2="20.4" stroke="#6366f1" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+    <!-- 折线（亮紫色） -->
+    <polyline 
+      points="2.4000000000000004,16.799999999999997 7.199999999999999,12 12,14.399999999999999 16.799999999999997,7.199999999999999 21.6,4.800000000000001"
+      fill="none" stroke="url(#icon)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 折线下方填充 -->
+    <polygon 
+      points="2.4000000000000004,16.799999999999997 7.199999999999999,12 12,14.399999999999999 16.799999999999997,7.199999999999999 21.6,4.800000000000001 21.6,20.4 2.4000000000000004,20.4"
+      fill="url(#icon)" opacity="0.15"/>
+    <!-- 数据点 -->
+    <circle cx="7.199999999999999" cy="12" r="1.28" fill="#a78bfa"/>
+    <circle cx="12" cy="14.399999999999999" r="1.28" fill="#a78bfa"/>
+    <circle cx="16.799999999999997" cy="7.199999999999999" r="1.28" fill="#a78bfa"/>
+    <!-- 柱状图（绿色，右下角小装饰） -->
+    <rect x="14.879999999999999" y="14.879999999999999" width="1.92" height="5.5200000000000005" rx="0.64" fill="url(#icon2)" opacity="0.7"/>
+    <rect x="17.759999999999998" y="12.48" width="1.92" height="7.92" rx="0.64" fill="url(#icon2)" opacity="0.7"/>
+    <rect x="20.64" y="10.08" width="1.92" height="10.32" rx="0.64" fill="url(#icon2)" opacity="0.7"/>
+  </g>
+</svg>

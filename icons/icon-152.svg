@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="152" height="152" viewBox="0 0 152 152" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#312e81;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="icon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="icon2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- 圆角背景 -->
+  <rect width="152" height="152" rx="33.44" ry="33.44" fill="url(#bg)"/>
+  <!-- 装饰圆 -->
+  <circle cx="129.2" cy="22.8" r="27.36" fill="#6366f1" opacity="0.2"/>
+  <circle cx="22.8" cy="129.2" r="18.24" fill="#34d399" opacity="0.15"/>
+  <!-- 主图标：折线图 -->
+  <g transform="translate(22, 22)">
+    <!-- 坐标轴 -->
+    <line x1="10.8" y1="91.8" x2="102.6" y2="91.8" stroke="#6366f1" stroke-width="3.8000000000000003" stroke-linecap="round" opacity="0.5"/>
+    <line x1="10.8" y1="16.2" x2="10.8" y2="91.8" stroke="#6366f1" stroke-width="3.8000000000000003" stroke-linecap="round" opacity="0.5"/>
+    <!-- 折线（亮紫色） -->
+    <polyline 
+      points="10.8,75.6 32.4,54 54,64.8 75.6,32.4 97.2,21.6"
+      fill="none" stroke="url(#icon)" stroke-width="7.6000000000000005" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 折线下方填充 -->
+    <polygon 
+      points="10.8,75.6 32.4,54 54,64.8 75.6,32.4 97.2,21.6 97.2,91.8 10.8,91.8"
+      fill="url(#icon)" opacity="0.15"/>
+    <!-- 数据点 -->
+    <circle cx="32.4" cy="54" r="6.08" fill="#a78bfa"/>
+    <circle cx="54" cy="64.8" r="6.08" fill="#a78bfa"/>
+    <circle cx="75.6" cy="32.4" r="6.08" fill="#a78bfa"/>
+    <!-- 柱状图（绿色，右下角小装饰） -->
+    <rect x="66.96" y="66.96" width="8.64" height="24.84" rx="3.04" fill="url(#icon2)" opacity="0.7"/>
+    <rect x="79.92" y="56.160000000000004" width="8.64" height="35.64" rx="3.04" fill="url(#icon2)" opacity="0.7"/>
+    <rect x="92.88" y="45.36" width="8.64" height="46.44" rx="3.04" fill="url(#icon2)" opacity="0.7"/>
+  </g>
+</svg>
