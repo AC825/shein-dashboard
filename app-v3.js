@@ -196,18 +196,21 @@ async function initMainApp() {
     updateSidebarFooter();
     navigate('dashboard');
 
-    // 登录后自动从云端同步数据，显示进度提示
+    // 登录后后台自动从云端同步数据（不阻塞页面渲染）
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = '⟳ 正在从云端加载数据...'; syncEl.style.color = '#f59e0b'; }
-    const syncOk = await syncFromSupabase();
-    if (syncOk) {
-      renderShopNav();
-      updateSidebarFooter();
-      if (syncEl) { syncEl.textContent = '✓ 数据已同步'; syncEl.style.color = '#10b981'; }
-      setTimeout(() => {
-        if (syncEl) { syncEl.textContent = ''; }
-      }, 4000);
-    }
+    syncFromSupabase().then(function(syncOk) {
+      if (syncOk) {
+        renderShopNav();
+        updateSidebarFooter();
+        if (syncEl) { syncEl.textContent = '✓ 数据已同步'; syncEl.style.color = '#10b981'; }
+        setTimeout(function() { if (syncEl) { syncEl.textContent = ''; } }, 4000);
+        navigate(currentPage, currentParam);
+      }
+    }).catch(function() {
+      if (syncEl) { syncEl.textContent = '⚠ 同步失败，使用本地数据'; syncEl.style.color = '#ef4444'; }
+      setTimeout(function() { if (syncEl) { syncEl.textContent = ''; } }, 5000);
+    });
     navigate(currentPage, currentParam);
     initRealtime();
   } else {
